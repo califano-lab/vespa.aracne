@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Logger;
+
+import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
 
 import common.DataMatrix;
 import common.DataVector;
@@ -22,8 +25,10 @@ public class MI {
 	// Variables Declaration
 	private String[] genes;
 	private int sampleNumber;
+	public  HashSet<String> kinaseSet;
 
 	private HashMap<String, HashMap<String, Double>> finalNetwork;
+	private HashMap<String, HashMap<String, Boolean>> finalNetworkSign;
 
 	// Main method to test the calculation
 	public static void main(String[] args) throws IOException{
@@ -116,15 +121,16 @@ public class MI {
 
 	// Constructor
 	public MI(
-			HashMap<String, short[]> rankData1,
-			HashMap<String, short[]> rankData2,
+			HashMap<String, DataVector> data,
 			String[] tfList,
+			HashSet<String> aKinaseSet,
 			Double miThreshold,
 			Integer threadCount
 			) {
-		this.genes = rankData2.keySet().toArray(new String[0]);
+		this.genes = data.keySet().toArray(new String[0]);
 		Arrays.sort(genes);
-		this.setSampleNumber(rankData1.get(genes[0]).length);
+		this.setSampleNumber(data.get(genes[0]).values.length);
+		kinaseSet = aKinaseSet;
 
 		List<String> templist = Arrays.asList(tfList);
 		HashSet<String> temptf = new HashSet<String>(templist);
@@ -134,15 +140,18 @@ public class MI {
 
 		// Loop to check which edges are kept. It will generate the finalNetwork HashMap
 		finalNetwork = new HashMap<String, HashMap<String, Double>>();
+		finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 		for(int i=0; i<tfList.length; i++){
 			HashMap<String, Double> tt = new HashMap<String, Double>();
+			HashMap<String, Boolean> ttSign = new HashMap<String, Boolean>();
 			finalNetwork.put(tfList[i], tt);
+			finalNetworkSign.put(tfList[i], ttSign);
 		}
 
 		// multi threading here, run threadCount many parallel MI calculations
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<tfList.length; i++){
-			MIThread mt = new MIThread(tfList, genes, rankData1, rankData2, miThreshold, i);
+			MIThreadNA mt = new MIThreadNA(tfList, genes, data, miThreshold, i);
 			executor.execute(mt);
 		}
 
@@ -156,43 +165,113 @@ public class MI {
 		//System.out.println("Edges discarded: "+notpass);
 	}
 
-	class MIThread extends Thread {
+	class MIThreadNA extends Thread {
 
 		private String[] tfList;
 		private String[] genes;
-		private HashMap<String, short[]> rankData1;
-		private HashMap<String, short[]> rankData2;
+		private HashMap<String, DataVector> data;
 		private double miThreshold;
 		private int tfNumber;
 
-		MIThread(String[] tfs, String[] genes, HashMap<String, short[]> rd1, HashMap<String, short[]> rd2, double mi, int tfNumber) {
-			this.tfList = tfs;
-			this.genes = genes;
-			this.rankData1 = rd1;
-			this.rankData2 = rd2;
-			this.miThreshold = mi;
-			this.tfNumber = tfNumber;
+		MIThreadNA(String[] _tfs, String[] _genes, HashMap<String, DataVector> _rd1, double _mi, int _tfNumber) {
+			tfList = _tfs;
+			genes = _genes;
+			data = _rd1;
+			miThreshold = _mi;
+			tfNumber = _tfNumber;
 		}
 
 		public void run() {
 			for(int j=0; j<genes.length; j++){
 				if(!genes[j].equals(tfList[tfNumber])){
-					short[] vectorX = rankData1.get(tfList[tfNumber]);
-					short[] vectorY = rankData2.get(genes[j]);
+					DataVector vectorX = data.get(tfList[tfNumber]);
+					DataVector vectorY = data.get(genes[j]);
 
 					double mi = computeMI(vectorX,vectorY);		// mutithread
 
 					// adaptive.miThresh supplants micut
 					if(mi >= miThreshold){
-						setMI(tfList[tfNumber], genes[j], mi);
+						// calculate correlation and sign
+						ArrayList<double[]> splitQuad = vectorX.getQuadrants(vectorY);
+						short[] valuesX = Methods.rankVector(splitQuad.get(0));
+						short[] valuesY = Methods.rankVector(splitQuad.get(1));
+						double[] vX = new double[valuesX.length];		
+						vX = castShort2Double(valuesX);
+						double[] vY = new double[valuesY.length];
+						vY = castShort2Double(valuesY);
+						
+						double correlation = new PearsonsCorrelation().correlation(vX,vY);
+						boolean sign =( ((int)Math.signum(correlation)) == 1);
+						
+						Logger.global.info("current regulator: \t" + tfList[tfNumber]);
+						Logger.global.info("current sign: \t " + sign);
+
+						if(kinaseSet!=null){
+							Logger.global.info("current regulator is Kinase: \t" + kinaseSet.contains( tfList[tfNumber]));
+							if(kinaseSet.contains( tfList[tfNumber]) & sign){
+									setMI(tfList[tfNumber], genes[j], mi);
+									setSign(tfList[tfNumber], genes[j], sign);
+							}else if((!kinaseSet.contains( tfList[tfNumber])) & !sign){
+									setMI(tfList[tfNumber], genes[j], mi);
+									setSign(tfList[tfNumber], genes[j], sign);
+							}
+						}else{
+							setMI(tfList[tfNumber], genes[j], mi);
+							setSign(tfList[tfNumber], genes[j], sign);
+						}
 					}
 				}
 			}
 		}
-
+		private double[] castShort2Double(short[] aVectorX) {
+			double[] transformed = new double[aVectorX.length];
+			short[] buffer = aVectorX.clone();
+			for (int j=0;j<aVectorX.length;j++) {
+			    transformed[j] = (double)buffer[j];
+			}
+			return transformed;
+		}
+		private synchronized void setSign(String _tf, String _gene, boolean _sign){
+			finalNetworkSign.get(_tf).put(_gene, _sign);
+		}
 		private synchronized void setMI(String _tf, String _gene, double _mi){
 			finalNetwork.get(_tf).put(_gene, _mi);
 		}
+	}
+
+	public static double computeMI(DataVector vectorX, DataVector vectorY){
+
+		ArrayList<double[]> splitQuad = vectorX.getQuadrants(vectorY);
+		short[] valuesX = Methods.rankVector(splitQuad.get(0));
+		short[] valuesY = Methods.rankVector(splitQuad.get(1));
+
+		//get the counts for na samples, perform first split by using the counts and the recursive mi call for sample pairs that have both values 
+		int bothNACount = (int)splitQuad.get(2)[0];
+		int na1 = (int)splitQuad.get(3)[0];
+		int na2 = (int)splitQuad.get(4)[0];
+
+		boolean firstLoop = true;
+		//double mi = computeMI(valuesX,valuesY);
+
+		//mi=(mi*valuesX.length)-Math.log(valuesX.lenghth);
+
+		double mi = 0;
+
+		if(valuesX.length < 8){
+			mi = getInformation(valuesX.length, (valuesX.length+na1), (valuesX.length+na2));
+		}
+		else{
+			mi = computeMI(valuesX,valuesY,(short)0,(short)(valuesX.length),(short)0,(short)(valuesY.length),firstLoop);
+		}
+
+		int numberOfSamples = vectorX.values.length;
+		mi += getInformation(na1, na1+bothNACount, na1+valuesY.length);
+		mi += getInformation(na2, na2+bothNACount, na2+valuesY.length);
+		mi += getInformation(bothNACount, bothNACount+na1, bothNACount+na2);
+
+		mi = mi/numberOfSamples + Math.log(numberOfSamples); // TODO why this (proof on whiteboard picture by Yishai, late January 2015)
+
+		return mi;
 	}
 
 	// This constructor is to initialize the object for computeMiThreshold
@@ -218,6 +297,12 @@ public class MI {
 		this.genes = data.genes.toArray(new String[0]);
 		this.setSampleNumber(data.samples.size());
 	}
+	public MI(DataMatrix data, HashSet<String> aKinaseSet) {
+		kinaseSet = aKinaseSet;
+		this.genes = data.genes.toArray(new String[0]);
+		this.setSampleNumber(data.samples.size());
+	}
+
 
 	// This constructor is to calculate the full MI (as in --nodpi mode)
 	/**
@@ -243,12 +328,39 @@ public class MI {
 				double mi = computeMI(vectorX,vectorY);
 
 				if(mi >= miThreshold){
-					finalNetwork.get(tfList[i]).put(tfList[j], mi);
-				}
 
+					double[] vX = new double[vectorX.length];		
+					vX = castShort2Double(vectorX);
+					double[] vY = new double[vectorY.length];
+					vY = castShort2Double(vectorY);
+					
+					double correlation = new PearsonsCorrelation().correlation(vX,vY);
+					boolean sign = (Math.signum(correlation) == 1);
+					if(kinaseSet!=null){
+						if( kinaseSet.contains(tfList[i]) & sign){ 
+							finalNetwork.get(tfList[i]).put(tfList[j], mi);
+							finalNetworkSign.get(tfList[i]).put(tfList[j], sign);
+						}else if( !kinaseSet.contains(tfList[i]) & !sign){
+							finalNetwork.get(tfList[i]).put(tfList[j], mi);
+							finalNetworkSign.get(tfList[i]).put(tfList[j], sign);
+						}
+					}else{
+						finalNetwork.get(tfList[i]).put(tfList[j], mi);
+						finalNetworkSign.get(tfList[i]).put(tfList[j], sign);
+					}
+				}
 			}
 		}
 		System.out.println("TFs processed: "+tfList.length);
+	}
+
+	public double[] castShort2Double(short[] vectorX) {
+		double[] transformed = new double[vectorX.length];
+		short[] buffer = vectorX.clone();
+		for (int j=0;j<vectorX.length;j++) {
+		    transformed[j] = (double)buffer[j];
+		}
+		return transformed;
 	}
 
 	//// Methods
@@ -256,41 +368,62 @@ public class MI {
 		return finalNetwork;
 	}
 
-	// Elegant method to find the MI threshold (based on permutation)
-	public double calibrateMIThreshold(int numberOfSamples, int numberOfGenes, double miPvalue, int _seed){
-		System.out.println("Finding threshold for "+numberOfSamples+" samples");
-		short[][] x = new short[numberOfGenes][numberOfSamples];
+	// This method takes into consideration NAs
+	public double calibrateMIThresholdNA(HashMap<String, DataVector> _data, int randomPaircount, double miPvalue, int _seed){
+		System.out.println("Finding threshold for NA "+randomPaircount+" gene pairs");
+
+		HashMap<String, DataVector> tempData = (HashMap<String, DataVector>)_data.clone();
 		Random r = new Random(_seed);
-		for(int i=0; i<x.length; i++){
-			for(int j=0; j<x[0].length; j++){
-				x[i][j] = (short)j;
-			}
-		}
-		for(int i=0; i<x.length; i++){
-			for(int j=0; j<x[0].length*10; j++){
-				int r1 = r.nextInt(x[0].length);
-				int r2 = r.nextInt(x[0].length);
-				short temp = x[i][r1];
-				x[i][r1] = x[i][r2];
-				x[i][r2] = temp;
-			}
-		}
+
+		String[] kset = _data.keySet().toArray(new String[0]);
+
 		ArrayList<Double> mit = new ArrayList<Double>();
-		for(int i=0; i<x.length; i++){
-			for(int j=(short)(i+1); j<x.length; j++){
-				boolean firstLoop = true;
-				mit.add(computeMI(x[i],x[j],(short)0,(short)x[i].length,(short)0,(short)x[j].length, firstLoop)/x[i].length + Math.log(x[j].length));
+
+		for(int i=0; i<randomPaircount; i++){
+
+			String r1 = kset[r.nextInt(kset.length)];
+			String r2 = kset[r.nextInt(kset.length)];
+
+			for(int j=0; j<tempData.get(r1).values.length; j++){
+
+				int randPos = r.nextInt(tempData.get(r1).values.length);
+				double temp = tempData.get(r1).values[j];
+				boolean temp2 =  tempData.get(r1).NAs[j];
+
+				tempData.get(r1).values[j] =  tempData.get(r1).values[randPos];
+				tempData.get(r1).NAs[j] =  tempData.get(r1).NAs[randPos];
+
+				tempData.get(r1).values[randPos] = temp;
+				tempData.get(r1).NAs[randPos] = temp2;
+
+
+				randPos = r.nextInt(tempData.get(r2).values.length);
+				temp = tempData.get(r2).values[j];
+				temp2 =  tempData.get(r2).NAs[j];
+
+				tempData.get(r2).values[j] =  tempData.get(r2).values[randPos];
+				tempData.get(r2).NAs[j] =  tempData.get(r2).NAs[randPos];
+
+				tempData.get(r2).values[randPos] = temp;
+				tempData.get(r2).NAs[randPos] = temp2;
 			}
+
+			mit.add(computeMI(tempData.get(r1), tempData.get(r2)));
 		}
+
 		double[] mis = new double[mit.size()];
 		for(int i=0; i<mit.size(); i++){
 			mis[i] = mit.get(i);
 		}
-		double[] rr = fitNull(mis,20);
+		double[] rr = fitNull(mis,(int)Math.round(randomPaircount*0.05));
 		double miThreshold = rr[1]*Math.log(miPvalue)+rr[0]; // This looks a lot like the config_kernel.txt parameters
 		System.out.println("Parameters for fitted threshold function: "+Arrays.toString(fitNull(mis,100)));
 		System.out.println("MI threshold: "+miThreshold);
 		return(miThreshold);
+	}
+	
+	public HashMap<String, HashMap<String, Boolean>> getFinalNetworkSign() {
+		return finalNetworkSign;
 	}
 
 	// Fit a null distribution method

@@ -4,15 +4,17 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Logger;
 
 public class DPI {
 
 	public DPI(){
 		
 	}
-	
+		
 	public HashMap<String, HashSet<String>> dpi(
 			HashMap<String, HashMap<String, Double>> finalNet,
+			HashMap<String, HashMap<String, Boolean>> finalNetSign,
 			int threadNumber
 			){
 			
@@ -23,6 +25,7 @@ public class DPI {
 
 			// transcriptionFactorsMI: first level keys are TFs, second level keys are TFs, the doubles are MI values
 			HashMap<String, HashMap<String, Double>> tftfNetwork = new HashMap<String, HashMap<String, Double>>();
+			HashMap<String, HashMap<String, Boolean>> tftfNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 			HashMap<String, HashSet<String>> removedEdges = new HashMap<String,HashSet<String>>();
 
 			for(String tf : transcriptionFactors){
@@ -34,16 +37,19 @@ public class DPI {
 			for (int i = 0; i < transcriptionFactors.length; i++) {
 				for (int j = 0; j < transcriptionFactors.length; j++) {
 					if (finalNet.get(transcriptionFactors[i]).containsKey(transcriptionFactors[j])) {
-						//if (finalNet.get(keys[i]).get(keys[j]) >= simCut) { // So, since simCut is not used, this check is unnecessary
 						
 						if (tftfNetwork.containsKey(transcriptionFactors[i])) {
 							tftfNetwork.get(transcriptionFactors[i]).put(transcriptionFactors[j], finalNet.get(transcriptionFactors[i]).get(transcriptionFactors[j]));
+							tftfNetworkSign.get(transcriptionFactors[i]).put(transcriptionFactors[j], finalNetSign.get(transcriptionFactors[i]).get(transcriptionFactors[j]));
+
 						} else {
 							HashMap<String, Double> dtemp = new HashMap<String, Double>();
 							dtemp.put(transcriptionFactors[j], finalNet.get(transcriptionFactors[i]).get(transcriptionFactors[j]));
 							tftfNetwork.put(transcriptionFactors[i], dtemp);
+							HashMap<String, Boolean> dtempSign = new HashMap<String, Boolean>();
+							dtempSign.put(transcriptionFactors[j], finalNetSign.get(transcriptionFactors[i]).get(transcriptionFactors[j]));
+							tftfNetworkSign.put(transcriptionFactors[i], dtempSign);
 						}
-						//}
 					}
 				}
 			}
@@ -56,7 +62,7 @@ public class DPI {
 					// targetsOfI is all genes having a significant edge with the TF i
 					// If the first TF is in our tftfMI...
 					if (tftfNetwork.containsKey(transcriptionFactors[i])) {
-						DPIThread mt = new DPIThread(i, transcriptionFactors, finalNet, tftfNetwork, removedEdges);
+						DPIThread mt = new DPIThread(i, transcriptionFactors, finalNet, finalNetSign, tftfNetwork, tftfNetworkSign, removedEdges);
 						executor.execute(mt);
 					}
 				}
@@ -73,7 +79,6 @@ public class DPI {
 			}
 			return(null);
 	}
-	
 
 	/**
 	 * The Class DPIThread.
@@ -83,30 +88,45 @@ public class DPI {
 		private int i = 0;
 		private String[] transcriptionFactors;
 		private HashMap<String, HashMap<String, Double>> finalNet;
+		private HashMap<String, HashMap<String, Boolean>> finalNetSign;
+
 		HashMap<String, HashMap<String, Double>> tftfNetwork;
+		HashMap<String, HashMap<String, Boolean>> tftfNetworkSign;
 		HashMap<String, HashSet<String>> removedEdges;
 		
-		public DPIThread(int _i, String[] _tfs, HashMap<String, HashMap<String, Double>> _finalNet, HashMap<String, HashMap<String, Double>> _tftfNetwork, HashMap<String, HashSet<String>> _removedEdges){
+		public DPIThread(int _i, String[] _tfs, 
+				HashMap<String, HashMap<String, Double>> _finalNet, 
+				HashMap<String, HashMap<String, Boolean>> _finalNetSign, 
+				HashMap<String, HashMap<String, Double>> _tftfNetwork, 
+				HashMap<String, HashMap<String, Boolean>> _tftfNetworkSign, 
+				HashMap<String, HashSet<String>> _removedEdges){
 			i = _i;
 			transcriptionFactors = _tfs;
 			finalNet = _finalNet;
+			finalNetSign = _finalNetSign;
 			tftfNetwork = _tftfNetwork;
+			tftfNetworkSign = _tftfNetworkSign;
 			removedEdges = _removedEdges;
 		}
 		
-		public void run(){
-			
+		public void run(){	
 			HashSet<String> targetsOfI = new HashSet<String>(finalNet.get(transcriptionFactors[i]).keySet());
 			HashMap<String, Double> fin1 = finalNet.get(transcriptionFactors[i]);
 			HashMap<String, Double> tft1 = tftfNetwork.get(transcriptionFactors[i]);
-			
+			HashMap<String, Boolean> fin1Sign = finalNetSign.get(transcriptionFactors[i]);
+			HashMap<String, Boolean> tft1Sign = tftfNetworkSign.get(transcriptionFactors[i]);
 			HashSet<String> rem1 = removedEdges.get(transcriptionFactors[i]);
+			
+			Logger.global.info("NUMBER of TFs \t  "	+ transcriptionFactors.length + 
+					" number target of I \t" + targetsOfI.size());
 			
 			for (int j = i + 1; j < transcriptionFactors.length; j++) {
 				// And if the second TF has an edge with the first TF...
 				if (tft1.containsKey(transcriptionFactors[j])) {
 					
 					HashMap<String, Double> fin2 = finalNet.get(transcriptionFactors[j]);
+					HashMap<String, Boolean> fin2Sign = finalNetSign.get(transcriptionFactors[j]);
+
 					HashSet<String> rem2 = removedEdges.get(transcriptionFactors[j]);
 					
 					// targetsOfJ is all genes having a significant edge with the TF j
@@ -117,18 +137,53 @@ public class DPI {
 					
 					// Obtain the TF-TF MI
 					double tftfMI = tft1.get(transcriptionFactors[j]);
+					boolean tftfMISign = tft1Sign.get(transcriptionFactors[j]);
+					
+					Logger.global.info("TF-TF:\t number of targets \t last one" 
+										+ transcriptionFactors[j] + "\t" 
+										+ targetsOfJ.size());
+
 
 					// Loop over the common targets
 					for (String target : targetsOfJ){
-	
+						Logger.global.info("target:\t " + target );
+
 						double v1 = fin1.get(target);
 						double v2 = fin2.get(target);
 						
-						if (v1 < tftfMI && v1 < v2) {
+						boolean s1 = fin1Sign.get(target);
+						boolean s2 = fin2Sign.get(target);
+						Logger.global.info("tftf v1 v2 mis:\t" + tftfMI + "\t"+ v1 + "\t"+ v2 );
+						Logger.global.info("Sign of tftf v1 v2 mis:\t" + tftfMISign +"\t" + s1 +"\t"+ s2 );
+
+						// regulator is positive correlation
+						if (tftfMISign & (s1 == s2)){
+							Logger.global.info("DPI for + + +:\t" );
+							if (v1 < tftfMI && v1 < v2) {
+								synchronized(rem1){
+									rem1.add(target);
+								}
+							} else if (v2 < tftfMI && v2 < v1) {
+								synchronized(rem2){
+									rem2.add(target);
+								}
+							}
+						}else if( (!tftfMISign) & (s1 != s2)){
+						// regulator is negative correlation
+							Logger.global.info("DPI for - + -:\t" );
+							if (v1 < tftfMI && v1 < v2) {
+								synchronized(rem1){
+									rem1.add(target);
+								}
+							} else if (v2 < tftfMI && v2 < v1) {
+								synchronized(rem2){
+									rem2.add(target);
+								}
+							}
+						}else{
 							synchronized(rem1){
 								rem1.add(target);
 							}
-						} else if (v2 < tftfMI && v2 < v1) {
 							synchronized(rem2){
 								rem2.add(target);
 							}
