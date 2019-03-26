@@ -5,16 +5,21 @@ import java.util.ArrayList;
 public class DataVector {
 	// Variable Declaration
 	public boolean [] NAs;
-	public double [] values;
-	public String geneName;
+	public short [] values;
 	
 	// Constructor
-	public DataVector(boolean [] NAs, double[] values, String geneName){
-		this.NAs=NAs;
+	public DataVector(short[] values){
+		boolean[] na = new boolean[values.length];
+		for (int i = 0; i<values.length; i++){
+			if (values[i]==0){
+				na[i] = true;
+			} else {
+				na[i] = false;
+			}
+		}
+		this.NAs=na;
 		this.values=values;
-		this.geneName=geneName;
 	}
-	
 	
 	// Methods
 
@@ -25,13 +30,13 @@ public class DataVector {
 	 * Nr. of samples with NAs in vector 2
 	 * 
 	*/
-	public ArrayList<double[]> getQuadrants(DataVector x){
-		ArrayList<double[]> output = new ArrayList<double[]>();
+	public ArrayList<short[]> getQuadrants(DataVector x){
+		ArrayList<short[]> output = new ArrayList<short[]>();
 
 		// Quadrant counts
-		double[] bothNAs = new double[1];
-		double[] NAs1 = new double[1];
-		double[] NAs2 = new double[1];
+		short[] bothNAs = new short[1];
+		short[] NAs1 = new short[1];
+		short[] NAs2 = new short[1];
 		bothNAs[0] = NAs1[0] = NAs2[0] = 0;
 		
 		// First loop does the counting
@@ -53,8 +58,8 @@ public class DataVector {
 		}
 	
 		// Second loop generates the not NAs vectors
-		double [] notNA1 = new double[lengthOfNotNAsInBoth];
-		double [] notNA2 = new double[lengthOfNotNAsInBoth];
+		short [] notNA1 = new short[lengthOfNotNAsInBoth];
+		short [] notNA2 = new short[lengthOfNotNAsInBoth];
 		int j = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==false & x.NAs[i]==false){
@@ -73,7 +78,7 @@ public class DataVector {
 	}
 	
 	
-	public double[] getNotNAvalues() {
+	public short[] getNotNAvalues() {
 		int length = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==false){
@@ -81,7 +86,7 @@ public class DataVector {
 			}
 		}
 		
-		double [] notNAvalues = new double[length];
+		short [] notNAvalues = new short[length];
 		int j = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==false){
@@ -92,7 +97,7 @@ public class DataVector {
 		return notNAvalues;
 	}
 	
-	public ArrayList<double[]> getNotNAsInBoth(DataVector x){
+	public ArrayList<short[]> getNotNAsInBoth(DataVector x){
 		int length = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==false & x.NAs[i]==false){
@@ -100,8 +105,8 @@ public class DataVector {
 			}
 		}
 	
-		double [] notNA1 = new double[length];
-		double [] notNA2 = new double[length];
+		short [] notNA1 = new short[length];
+		short [] notNA2 = new short[length];
 		int j = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==false & x.NAs[i]==false){
@@ -110,14 +115,14 @@ public class DataVector {
 				j++;		
 			}
 		}
-		ArrayList<double[]> output = new ArrayList<double[]>();
+		ArrayList<short[]> output = new ArrayList<short[]>();
 		output.add(notNA1);
 		output.add(notNA2);
 		return output;
 	}
 
 	
-	public ArrayList<double[]> getNotNAsInFirst(DataVector x){
+	public ArrayList<short[]> getNotNAsInFirst(DataVector x){
 		int length = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==false & x.NAs[i]==true){
@@ -125,8 +130,8 @@ public class DataVector {
 			}
 		}
 	
-		double [] notNA1 = new double[length];
-		double [] NA2 = new double[length];
+		short [] notNA1 = new short[length];
+		short [] NA2 = new short[length];
 		int j = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==false & x.NAs[i]==true){
@@ -135,13 +140,13 @@ public class DataVector {
 				j++;		
 			}
 		}
-		ArrayList<double[]> output = new ArrayList<double[]>();
+		ArrayList<short[]> output = new ArrayList<short[]>();
 		output.add(notNA1);
 		output.add(NA2);
 		return output;
 	}
 
-	public ArrayList<double[]> getNotNAsInSecond(DataVector x){
+	public ArrayList<short[]> getNotNAsInSecond(DataVector x){
 		int length = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==true & x.NAs[i]==false){
@@ -149,8 +154,8 @@ public class DataVector {
 			}
 		}
 	
-		double [] NA1 = new double[length];
-		double [] notNA2 = new double[length];
+		short [] NA1 = new short[length];
+		short [] notNA2 = new short[length];
 		int j = 0;
 		for(int i=0; i<NAs.length; i++){
 			if(NAs[i]==true & x.NAs[i]==false){
@@ -159,7 +164,7 @@ public class DataVector {
 				j++;		
 			}
 		}
-		ArrayList<double[]> output = new ArrayList<double[]>();
+		ArrayList<short[]> output = new ArrayList<short[]>();
 		output.add(NA1);
 		output.add(notNA2);
 		return output;

@@ -68,6 +68,24 @@ public class Methods {
 		return rankVector;
 	}
 
+	public static short[] rankVector(double[] inputVector, boolean[] naVector){
+		short[] rankVector = new short[inputVector.length];
+		for(int i=0; i<inputVector.length; i++){
+			if(naVector[i]){
+				rankVector[i] = 0;
+			}else{
+				int counter = 1;
+				for(int j=0; j<inputVector.length; j++){
+					if(inputVector[i] < inputVector[j]){
+						counter++;
+					}
+				}
+				rankVector[i] = (short)counter;
+			}
+		}
+		return rankVector;
+	}
+
 	public static short[] union(short[] shortA, short[] shortB){
 		Short[] inputA = ArrayUtils.toObject(shortA);
 		Short[] inputB = ArrayUtils.toObject(shortB);

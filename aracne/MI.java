@@ -17,7 +17,6 @@ import java.util.logging.Logger;
 
 import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
 
-import common.DataMatrix;
 import common.DataVector;
 import common.Methods;
 
@@ -121,15 +120,15 @@ public class MI {
 
 	// Constructor
 	public MI(
-			HashMap<String, DataVector> data,
+			HashMap<String, short[]> rankData,
 			String[] tfList,
 			HashSet<String> aKinaseSet,
 			Double miThreshold,
 			Integer threadCount
 			) {
-		this.genes = data.keySet().toArray(new String[0]);
+		this.genes = rankData.keySet().toArray(new String[0]);
 		Arrays.sort(genes);
-		this.setSampleNumber(data.get(genes[0]).values.length);
+		this.setSampleNumber(rankData.get(genes[0]).length);
 		kinaseSet = aKinaseSet;
 
 		List<String> templist = Arrays.asList(tfList);
@@ -151,7 +150,7 @@ public class MI {
 		// multi threading here, run threadCount many parallel MI calculations
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<tfList.length; i++){
-			MIThreadNA mt = new MIThreadNA(tfList, genes, data, miThreshold, i);
+			MIThreadNA mt = new MIThreadNA(tfList, genes, rankData, miThreshold, i);
 			executor.execute(mt);
 		}
 
@@ -169,14 +168,14 @@ public class MI {
 
 		private String[] tfList;
 		private String[] genes;
-		private HashMap<String, DataVector> data;
+		private HashMap<String, short[]> rankData;
 		private double miThreshold;
 		private int tfNumber;
 
-		MIThreadNA(String[] _tfs, String[] _genes, HashMap<String, DataVector> _rd1, double _mi, int _tfNumber) {
+		MIThreadNA(String[] _tfs, String[] _genes, HashMap<String, short[]> _rankData, double _mi, int _tfNumber) {
 			tfList = _tfs;
 			genes = _genes;
-			data = _rd1;
+			rankData = _rankData;
 			miThreshold = _mi;
 			tfNumber = _tfNumber;
 		}
@@ -184,21 +183,18 @@ public class MI {
 		public void run() {
 			for(int j=0; j<genes.length; j++){
 				if(!genes[j].equals(tfList[tfNumber])){
-					DataVector vectorX = data.get(tfList[tfNumber]);
-					DataVector vectorY = data.get(genes[j]);
+					short[] vectorX = rankData.get(tfList[tfNumber]);
+					short[] vectorY = rankData.get(genes[j]);
 
 					double mi = computeMI(vectorX,vectorY);		// mutithread
 
 					// adaptive.miThresh supplants micut
 					if(mi >= miThreshold){
 						// calculate correlation and sign
-						ArrayList<double[]> splitQuad = vectorX.getQuadrants(vectorY);
-						short[] valuesX = Methods.rankVector(splitQuad.get(0));
-						short[] valuesY = Methods.rankVector(splitQuad.get(1));
-						double[] vX = new double[valuesX.length];		
-						vX = castShort2Double(valuesX);
-						double[] vY = new double[valuesY.length];
-						vY = castShort2Double(valuesY);
+						double[] vX = new double[vectorX.length];		
+						vX = castShort2Double(vectorX);
+						double[] vY = new double[vectorY.length];
+						vY = castShort2Double(vectorY);
 						
 						double correlation = new PearsonsCorrelation().correlation(vX,vY);
 						boolean sign =( ((int)Math.signum(correlation)) == 1);
@@ -241,9 +237,9 @@ public class MI {
 
 	public static double computeMI(DataVector vectorX, DataVector vectorY){
 
-		ArrayList<double[]> splitQuad = vectorX.getQuadrants(vectorY);
-		short[] valuesX = Methods.rankVector(splitQuad.get(0));
-		short[] valuesY = Methods.rankVector(splitQuad.get(1));
+		ArrayList<short[]> splitQuad = vectorX.getQuadrants(vectorY);
+		short[] valuesX = splitQuad.get(0);
+		short[] valuesY = splitQuad.get(1);
 
 		//get the counts for na samples, perform first split by using the counts and the recursive mi call for sample pairs that have both values 
 		int bothNACount = (int)splitQuad.get(2)[0];
@@ -280,29 +276,8 @@ public class MI {
 	 *
 	 * @param rankData the rank data
 	 */
-	public MI(
-			HashMap<String, short[]> rankData
-			) {
-		this.genes = rankData.keySet().toArray(new String[0]);
-		this.setSampleNumber(rankData.get(genes[0]).length);
+	public MI(HashMap<String, DataVector> rankData) {
 	}
-
-	// This constructor is to initialize the object for computeMiThreshold
-	/**
-	 * Instantiates a new mi.
-	 *
-	 * @param data the data
-	 */
-	public MI(DataMatrix data) {
-		this.genes = data.genes.toArray(new String[0]);
-		this.setSampleNumber(data.samples.size());
-	}
-	public MI(DataMatrix data, HashSet<String> aKinaseSet) {
-		kinaseSet = aKinaseSet;
-		this.genes = data.genes.toArray(new String[0]);
-		this.setSampleNumber(data.samples.size());
-	}
-
 
 	// This constructor is to calculate the full MI (as in --nodpi mode)
 	/**
@@ -370,7 +345,7 @@ public class MI {
 
 	// This method takes into consideration NAs
 	public double calibrateMIThresholdNA(HashMap<String, DataVector> _data, int randomPaircount, double miPvalue, int _seed){
-		System.out.println("Finding threshold for NA "+randomPaircount+" gene pairs");
+		System.out.println("Finding threshold for "+randomPaircount+" gene pairs");
 
 		HashMap<String, DataVector> tempData = (HashMap<String, DataVector>)_data.clone();
 		Random r = new Random(_seed);
@@ -387,7 +362,7 @@ public class MI {
 			for(int j=0; j<tempData.get(r1).values.length; j++){
 
 				int randPos = r.nextInt(tempData.get(r1).values.length);
-				double temp = tempData.get(r1).values[j];
+				short temp = tempData.get(r1).values[j];
 				boolean temp2 =  tempData.get(r1).NAs[j];
 
 				tempData.get(r1).values[j] =  tempData.get(r1).values[randPos];

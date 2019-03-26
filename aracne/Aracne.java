@@ -25,8 +25,8 @@ import java.util.logging.Logger;
 
 import aracne.BootstrapConsolidator;
 import common.DataParser;
+import common.ExpressionMatrix;
 
-import common.DataMatrix;
 import common.DataVector;
 
 public class Aracne {
@@ -109,6 +109,9 @@ public class Aracne {
 			if (cmd.hasOption("pvalue")) {
 				miPvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
 			}
+			if (cmd.hasOption("geneNumber")) {
+				geneNumber = Double.parseInt(cmd.getOptionValue("geneNumber"));
+			}
 			if (cmd.hasOption("seed")) {
 				seed = Integer.parseInt(cmd.getOptionValue("seed"));
 			}
@@ -161,7 +164,7 @@ public class Aracne {
 			File expressionFile = new File(expPath);
 			outputFolder.mkdir();
 
-			runThreshold(expressionFile,outputFolder,miPvalue,seed);
+			runThreshold(expressionFile,outputFolder,geneNumber,miPvalue,seed);
 		}
 		else if(!isConsolidate){
 			File expressionFile = new File(expPath);
@@ -192,13 +195,15 @@ public class Aracne {
 
 
 	// Calculate Threshold mode
-	private static void runThreshold(File _expressionFile, File _outputFolder, int geneNumberInMIthresholding, double miPvalue, int seed) throws NumberFormatException, Exception{
+	private static void runThreshold(File expressionFile, File outputFolder, int geneNumber, double miPvalue, int seed) throws NumberFormatException, Exception{
 		// Read expression matrix and transcription factor lists
-		DataMatrix em = new DataMatrix(_expressionFile);
-		HashMap<String, DataVector> data = em.data;
+		ExpressionMatrix em = new ExpressionMatrix(expressionFile);
+
+		// Generate ranked data
+		HashMap<String, DataVector> rankData = em.rankDV(random);
 		
 		// Check if the sample size
-		int sampleNumber = em.samples.size();
+		int sampleNumber = em.getSamples().size();
 		if(sampleNumber>32767){
 			System.err.println("Warning: sample number is higher than the short data limit");
 			System.exit(1);
@@ -206,14 +211,14 @@ public class Aracne {
 
 		//// Calculate threshold for the required p-value
 		// Don't if a threshold file already exists
-		File miThresholdFile = new File(_outputFolder+"/miThreshold_p"+formatter.format(miPvalue)+"_samples"+sampleNumber+".txt");
+		File miThresholdFile = new File(outputFolder+"/miThreshold_p"+formatter.format(miPvalue)+"_samples"+sampleNumber+".txt");
 		double miThreshold;
 
 		if(miThresholdFile.exists()){
 			System.out.println("MI threshold file was already there, but I am recalculating it.");
 		}
-		MI miCPU = new MI(em);
-		miThreshold = miCPU.calibrateMIThresholdNA(data,geneNumberInMIthresholding,miPvalue,seed);
+		MI miCPU = new MI(rankData);
+		miThreshold = miCPU.calibrateMIThresholdNA(rankData,geneNumber,miPvalue,seed);
 		DataParser.writeValue(miThreshold, miThresholdFile);
 	}
 
@@ -231,19 +236,24 @@ public class Aracne {
 			boolean nobootstrap // Do not use bootstrap
 			) throws NumberFormatException, Exception {
 		long initialTime = System.currentTimeMillis();
-		// Read expression matrices 
-		DataMatrix em = new DataMatrix(expressionFile);
-				
+
+		// Read expression matrix 
+		ExpressionMatrix em = new ExpressionMatrix(expressionFile);
+
+		// Generate ranked data
+		HashMap<String, short[]> rankData;
+
 		// Bootstrap matrix
 		if(!nobootstrap){
 			System.out.println("Bootstrapping input matrix with "+em.getGenes().size()+" genes and "+em.getSamples().size()+" samples");
-			em.bootstrap(random);
+			ExpressionMatrix bootstrapped = em.bootstrap(random);
+			rankData = bootstrapped.rank(random);
+		} else {
+			rankData = em.rank(random);
 		}
 
-		HashMap<String, DataVector> data = em.data;
-
 		// Check if the sample size is less than the short limit
-		int sampleNumber = em.getSamples().size();
+		int sampleNumber = rankData.get(rankData.keySet().toArray()[0]).length;
 		if(sampleNumber>32767){
 			System.err.println("Warning: sample number is higher than the short data limit");
 			System.exit(1);
@@ -286,7 +296,7 @@ public class Aracne {
 		HashMap<String, HashMap<String, Double>> finalNetwork = new HashMap<String, HashMap<String, Double>>();
 		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 
-		MI miCPU = new MI(data,tfList,kinaseSet,miThreshold,threadCount);
+		MI miCPU = new MI(rankData,tfList,kinaseSet,miThreshold,threadCount);
 
 		finalNetwork = miCPU.getFinalNetwork();
 		finalNetworkSign = miCPU.getFinalNetworkSign();
