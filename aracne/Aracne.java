@@ -48,22 +48,22 @@ public class Aracne {
 		Options options = new Options();
 
 		// Flag arguments
-		options.addOption("c", "consolidate", false, "");
-		options.addOption("j", "calculateThreshold", false, "");
-		options.addOption("n", "nodpi", false, "");
-		options.addOption("b", "nobootstrap", false, "");
-		options.addOption("r", "nobonferroni", false, "");
+		options.addOption("c", "consolidate", false, "Run ARACNe in consolidation mode");
+		options.addOption("j", "calculateThreshold", false, "Run ARACNe in MI threshold calculation mode");
+		options.addOption("n", "nodpi", false, "Run ARACNe without DPI");
+		options.addOption("b", "nobootstrap", false, "Run ARACNe without bootstrapping");
+		options.addOption("r", "nobonferroni", false, "Run ARACNe without Bonferroni correction");
 
 		// Arguments with values
-		options.addOption("e", "expfile", true, "");
-		options.addOption("o", "output", true, "");
-		options.addOption("k", "kinases", true, "");
-		options.addOption("t", "tfs", true, "");
-		options.addOption("p", "pvalue", true, "");
-		options.addOption("g", "numberOfGenes", true, "");
-		options.addOption("s", "seed", true, "");
-		options.addOption("m", "threads", true, "");
-		options.addOption("v", "consolidatepvalue", true, "");
+		options.addOption("e", "expfile", true, "Expression Matrix (M x N); M=genes, N=samples; Designate missing values with NA");
+		options.addOption("o", "output", true, "Output directory");
+		options.addOption("k", "kinases", true, "Kinase identifier file; enables phosphoproteomics dDPI");
+		options.addOption("t", "tfs", true, "Regulator identifier file (transcription factors or kinases/phosphatases)");
+		options.addOption("p", "pvalue", true, "Threshold mode: p-value threshold for MI significance");
+		options.addOption("g", "numberOfGenes", true, "Threshold mode: Number of randomly sampled genes [default: 3000]");
+		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
+		options.addOption("m", "threads", true, "Number of threads to use [default: 1]");
+		options.addOption("v", "consolidatepvalue", true, "Bootstrapping: p-value threshold for the Poisson test of edge significance [default: 0.05]");
 
 		// Default arguments
 		boolean isConsolidate = false;
