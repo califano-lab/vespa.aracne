@@ -110,7 +110,7 @@ public class Aracne {
 				miPvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
 			}
 			if (cmd.hasOption("geneNumber")) {
-				geneNumber = Double.parseInt(cmd.getOptionValue("geneNumber"));
+				geneNumber = Integer.parseInt(cmd.getOptionValue("geneNumber"));
 			}
 			if (cmd.hasOption("seed")) {
 				seed = Integer.parseInt(cmd.getOptionValue("seed"));
@@ -148,12 +148,13 @@ public class Aracne {
 			System.exit(1);
 		}
 
-		File outputFolder = new File(outputFolderPath);
+		File outputFolder = new File(outputPath);
 		
 		if(seed!=null){
 			random = new Random(seed);
 		} else{
 			random = new Random();
+		}
 
 		// Here the program forks
 		// You can calculate the MI threshold
@@ -171,6 +172,7 @@ public class Aracne {
 			File tfFile = new File(tfsPath);
 
 			// if kinases file is present, proteomic-mode is enabled.
+			File kinasesFile = null;
 			if(kinasesPath != null){
 				kinasesFile = new File(kinasesPath);
 			}
@@ -192,7 +194,6 @@ public class Aracne {
 			runConsolidate(outputFolder,nobonferroni,consolidatePvalue);
 		}
 	}
-
 
 	// Calculate Threshold mode
 	private static void runThreshold(File expressionFile, File outputFolder, int geneNumber, double miPvalue, int seed) throws NumberFormatException, Exception{
