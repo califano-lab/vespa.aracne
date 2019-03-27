@@ -1,6 +1,12 @@
 package aracne;
 
-import jargs.gnu.CmdLineParser;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.ParseException;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -31,67 +37,115 @@ public class Aracne {
 	public static void main(String[] args) throws Exception {
 		Locale.setDefault(Locale.US);
 
-		System.out.println("ARACNe (Git revision: " + Aracne.class.getPackage().getImplementationVersion() + ")");
+		System.out.println("ARACNe (revision: " + Aracne.class.getPackage().getImplementationVersion() + ")");
 
 		//// Parse arguments
-		CmdLineParser parser = new CmdLineParser();
-		CmdLineParser.Option optionExpressionFile1 = parser.addStringOption('e', "expfile_upstream");
-		CmdLineParser.Option optionExpressionFile2 = parser.addStringOption('d', "expfile_downstream");
-		CmdLineParser.Option optionTranscriptionFactorsFile = parser.addStringOption('t', "tfs");
-		CmdLineParser.Option optionOutputFolder = parser.addStringOption('o', "output");
-		CmdLineParser.Option optionConsolidate = parser.addBooleanOption('c',"consolidate");
-		CmdLineParser.Option optionCalculateThreshold = parser.addBooleanOption('j',"calculateThreshold");
-		CmdLineParser.Option optionPvalue = parser.addDoubleOption('p',"pvalue");
-		CmdLineParser.Option optionSeed = parser.addIntegerOption('s',"seed");
-		CmdLineParser.Option optionThreaded = parser.addIntegerOption('m',"threads");
-		CmdLineParser.Option optionNodpi = parser.addBooleanOption('n',"nodpi");
-		CmdLineParser.Option optionNobootstrap = parser.addBooleanOption('b',"nobootstrap");
-		CmdLineParser.Option optionNobonferroni = parser.addBooleanOption('r',"nobonferroni");
-		CmdLineParser.Option optionConsolidatepvalue = parser.addDoubleOption('v',"consolidatepvalue");
+		CommandLineParser parser = new DefaultParser();
+		Options options = new Options();
 
-		try {
-			parser.parse(args);
-		}
-		catch ( CmdLineParser.OptionException e ) {
-			System.err.println(e.getMessage());
-			System.exit(2);
-		}
+		// Flag arguments
+		options.addOption("c", "consolidate", false, "");
+		options.addOption("j", "calculateThreshold", false, "");
+		options.addOption("n", "nodpi", false, "");
+		options.addOption("b", "nobootstrap", false, "");
+		options.addOption("r", "nobonferroni", false, "");
 
-		File outputFolder = new File((String)parser.getOptionValue(optionOutputFolder));
+		// Arguments with values
+		options.addOption("e", "expfile_upstream", true, "");
+		options.addOption("d", "expfile_downstream", true, "");
+		options.addOption("o", "output", true, "");
+		options.addOption("t", "tfs", true, "");
+		options.addOption("p", "pvalue", true, "");
+		options.addOption("s", "seed", true, "");
+		options.addOption("m", "threads", true, "");
+		options.addOption("v", "consolidatepvalue", true, "");
 
 
+
+		// Default arguments
 		boolean isConsolidate = false;
-		if ((Boolean)parser.getOptionValue(optionConsolidate)!=null) {
-			isConsolidate = true;
-		}
-
 		boolean isThreshold = false;
-		if ((Boolean)parser.getOptionValue(optionCalculateThreshold)!=null) {
-			isThreshold = true;
-		}
-
 		boolean noDPI = false;
-		if ((Boolean)parser.getOptionValue(optionNodpi)!=null) {
-			noDPI = true;
+		boolean nobootstrap = false;
+		boolean nobonferroni = false;
+
+		String exp1File = null;
+		String exp2File = null;
+		String outputFolderPath = null;
+		String tfsPath = null;
+		Double miPvalue = 1E-8;
+		Integer seed = null;
+		Integer threadCount = 1;
+		Double consolidatePvalue = 0.05; 
+
+		// Parse arguments
+		try {
+			CommandLine cmd = parser.parse( options, args);
+
+			if (cmd.hasOption("consolidate")) {
+				isConsolidate = true;
+			}
+			if (cmd.hasOption("calculateThreshold")) {
+				isThreshold = true;
+			}
+			if (cmd.hasOption("nodpi")) {
+				noDPI = true;
+			}
+			if (cmd.hasOption("nobootstrap")) {
+				nobootstrap = true;
+			}
+			if (cmd.hasOption("nobonferroni")) {
+				nobonferroni = true;
+			}
+			if (cmd.hasOption("consolidatepvalue")) {
+				consolidatePvalue = Double.parseDouble(cmd.getOptionValue("consolidatepvalue"));
+			}
+			if (cmd.hasOption("pvalue")) {
+				miPvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
+			}
+			if (cmd.hasOption("seed")) {
+				seed = Integer.parseInt(cmd.getOptionValue("seed"));
+			}
+			if (cmd.hasOption("threads")) {
+				threadCount = Integer.parseInt(cmd.getOptionValue("threads"));
+			}
+			if (cmd.hasOption("expfile_upstream")) {
+				exp1File = (String)cmd.getOptionValue("expfile_upstream");
+			}
+			if (cmd.hasOption("expfile_downstream")) {
+				exp2File = (String)cmd.getOptionValue("expfile_downstream");
+			}
+			if (cmd.hasOption("output")) {
+				outputFolderPath = (String)cmd.getOptionValue("output");
+			}
+			if (cmd.hasOption("tfs")) {
+				tfsPath = (String)cmd.getOptionValue("tfs");
+			}
+
+			if (isConsolidate && outputFolderPath==null) {
+				throw new ParseException("Missing required option for consolidation: output");
+			}
+			else if (isThreshold && (outputFolderPath==null || exp1File==null)) {
+				throw new ParseException("Missing required options for finding MI threshold: expfile_upstream or output");
+			}
+			else if (!isConsolidate && !isThreshold && (outputFolderPath==null || exp1File==null || tfsPath==null)) {
+				throw new ParseException("Missing required options for ARACNe: expfile_upstream, tfs or output");
+			}
+
+		} catch( ParseException exp ) {
+			HelpFormatter formatter = new HelpFormatter();
+			formatter.printHelp("aracne.jar", options);
+		    System.out.println( exp.getMessage() );
+			System.exit(1);
 		}
 
-		boolean nobootstrap = false;
-		if ((Boolean)parser.getOptionValue(optionNobootstrap)!=null) {
-			nobootstrap = true;
-		}
+		File outputFolder = new File(outputFolderPath);
 		
-		boolean nobonferroni = false;
-		if ((Boolean)parser.getOptionValue(optionNobonferroni)!=null) {
-			nobonferroni = true;
+		if(seed!=null){
+			random = new Random(seed);
+		} else{
+			random = new Random();
 		}
-		
-		Double consolidatePvalue;
-		try {
-			consolidatePvalue = new Double((Double)parser.getOptionValue(optionConsolidatepvalue));
-		} catch (Exception e) {
-			consolidatePvalue = 0.05;
-		}
-		
 
 		// Here the program forks
 		// You can calculate the MI threshold
@@ -99,24 +153,14 @@ public class Aracne {
 		// You can consolidate bootstraps
 
 		if(isThreshold){
-			File expressionFile = new File((String)parser.getOptionValue(optionExpressionFile1));
+			File expressionFile = new File(exp1File);
 			outputFolder.mkdir();
-			Double miPvalue = new Double((Double) parser.getOptionValue(optionPvalue));
-			Integer seed = (Integer)parser.getOptionValue(optionSeed);
-			if(seed!=null){
-				random = new Random(seed);
-			} else{
-				random = new Random();
-			}
+
 			runThreshold(expressionFile,outputFolder,miPvalue,seed);
 		}
 		else if(!isConsolidate){
-			String exp1File = (String)parser.getOptionValue(optionExpressionFile1);
 			File expressionFile1 = new File(exp1File);
-			String exp2File = (String)parser.getOptionValue(optionExpressionFile2);
-			File transcriptionFactorsFile = new File((String)parser.getOptionValue(optionTranscriptionFactorsFile));
-			Integer seed = (Integer)parser.getOptionValue(optionSeed);
-			Integer threadCount = (Integer)parser.getOptionValue(optionThreaded);
+			File transcriptionFactorsFile = new File(tfsPath);
 
 			if(exp2File == null){
 				exp2File = exp1File;
@@ -125,17 +169,7 @@ public class Aracne {
 
 			File expressionFile2 = new File(exp2File);
 
-			if(threadCount == null){
-				threadCount = 1;
-			}
-
-			if(seed!=null){
-				random = new Random(seed);
-			} else{
-				random = new Random();
-			}
 			String processId = new BigInteger(130, random).toString(32);
-			Double miPvalue = new Double((Double) parser.getOptionValue(optionPvalue));
 			runAracne(
 					expressionFile1,
 					expressionFile2,
