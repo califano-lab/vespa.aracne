@@ -119,7 +119,7 @@ public class Aracne {
 				threadCount = Integer.parseInt(cmd.getOptionValue("threads"));
 			}
 			if (cmd.hasOption("expfile")) {
-				expPath = (String)cmd.getOptionValue("expfile_upstream");
+				expPath = (String)cmd.getOptionValue("expfile");
 			}
 			if (cmd.hasOption("output")) {
 				outputPath = (String)cmd.getOptionValue("output");
@@ -132,13 +132,13 @@ public class Aracne {
 			}
 
 			if (isConsolidate && outputPath==null) {
-				throw new ParseException("Missing required option for consolidation: output");
+				throw new ParseException("Missing required option for consolidation mode: output");
 			}
 			else if (isThreshold && (outputPath==null || expPath==null)) {
-				throw new ParseException("Missing required options for finding MI threshold: expfile_upstream or output");
+				throw new ParseException("Missing required options for finding MI threshold mode: expfile or output");
 			}
 			else if (!isConsolidate && !isThreshold && (outputPath==null || expPath==null || tfsPath==null)) {
-				throw new ParseException("Missing required options for ARACNe: expfile_upstream, tfs or output");
+				throw new ParseException("Missing required options for primary mode: expfile, tfs or output");
 			}
 
 		} catch( ParseException exp ) {
