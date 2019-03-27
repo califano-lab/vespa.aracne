@@ -15,7 +15,8 @@ public class DPI {
 	public HashMap<String, HashSet<String>> dpi(
 			HashMap<String, HashMap<String, Double>> finalNet,
 			HashMap<String, HashMap<String, Boolean>> finalNetSign,
-			int threadNumber
+			int threadNumber,
+			boolean dDPI
 			){
 			
 			// Keys are hubs
@@ -62,7 +63,7 @@ public class DPI {
 					// targetsOfI is all genes having a significant edge with the TF i
 					// If the first TF is in our tftfMI...
 					if (tftfNetwork.containsKey(transcriptionFactors[i])) {
-						DPIThread mt = new DPIThread(i, transcriptionFactors, finalNet, finalNetSign, tftfNetwork, tftfNetworkSign, removedEdges);
+						DPIThread mt = new DPIThread(i, dDPI, transcriptionFactors, finalNet, finalNetSign, tftfNetwork, tftfNetworkSign, removedEdges);
 						executor.execute(mt);
 					}
 				}
@@ -86,6 +87,7 @@ public class DPI {
 	public class DPIThread extends Thread{
 		
 		private int i = 0;
+		private boolean dDPI = false;
 		private String[] transcriptionFactors;
 		private HashMap<String, HashMap<String, Double>> finalNet;
 		private HashMap<String, HashMap<String, Boolean>> finalNetSign;
@@ -94,13 +96,14 @@ public class DPI {
 		HashMap<String, HashMap<String, Boolean>> tftfNetworkSign;
 		HashMap<String, HashSet<String>> removedEdges;
 		
-		public DPIThread(int _i, String[] _tfs, 
+		public DPIThread(int _i, boolean _dDPI, String[] _tfs, 
 				HashMap<String, HashMap<String, Double>> _finalNet, 
 				HashMap<String, HashMap<String, Boolean>> _finalNetSign, 
 				HashMap<String, HashMap<String, Double>> _tftfNetwork, 
 				HashMap<String, HashMap<String, Boolean>> _tftfNetworkSign, 
 				HashMap<String, HashSet<String>> _removedEdges){
 			i = _i;
+			dDPI = _dDPI;
 			transcriptionFactors = _tfs;
 			finalNet = _finalNet;
 			finalNetSign = _finalNetSign;
@@ -156,9 +159,42 @@ public class DPI {
 						Logger.getGlobal().info("tftf v1 v2 mis:\t" + tftfMI + "\t"+ v1 + "\t"+ v2 );
 						Logger.getGlobal().info("Sign of tftf v1 v2 mis:\t" + tftfMISign +"\t" + s1 +"\t"+ s2 );
 
-						// regulator is positive correlation
-						if (tftfMISign & (s1 == s2)){
-							Logger.getGlobal().info("DPI for + + +:\t" );
+						// apply directional DPI for regulators with known sign of action
+						if (dDPI)
+						{
+							// regulator is positive correlation
+							if (tftfMISign & (s1 == s2)){
+								Logger.getGlobal().info("DPI for + + +:\t" );
+								if (v1 < tftfMI && v1 < v2) {
+									synchronized(rem1){
+										rem1.add(target);
+									}
+								} else if (v2 < tftfMI && v2 < v1) {
+									synchronized(rem2){
+										rem2.add(target);
+									}
+								}
+							}else if( (!tftfMISign) & (s1 != s2)){
+							// regulator is negative correlation
+								Logger.getGlobal().info("DPI for - + -:\t" );
+								if (v1 < tftfMI && v1 < v2) {
+									synchronized(rem1){
+										rem1.add(target);
+									}
+								} else if (v2 < tftfMI && v2 < v1) {
+									synchronized(rem2){
+										rem2.add(target);
+									}
+								}
+							}else{
+								synchronized(rem1){
+									rem1.add(target);
+								}
+								synchronized(rem2){
+									rem2.add(target);
+								}
+							}
+						} else {
 							if (v1 < tftfMI && v1 < v2) {
 								synchronized(rem1){
 									rem1.add(target);
@@ -167,25 +203,6 @@ public class DPI {
 								synchronized(rem2){
 									rem2.add(target);
 								}
-							}
-						}else if( (!tftfMISign) & (s1 != s2)){
-						// regulator is negative correlation
-							Logger.getGlobal().info("DPI for - + -:\t" );
-							if (v1 < tftfMI && v1 < v2) {
-								synchronized(rem1){
-									rem1.add(target);
-								}
-							} else if (v2 < tftfMI && v2 < v1) {
-								synchronized(rem2){
-									rem2.add(target);
-								}
-							}
-						}else{
-							synchronized(rem1){
-								rem1.add(target);
-							}
-							synchronized(rem2){
-								rem2.add(target);
 							}
 						}
 					}

@@ -268,6 +268,7 @@ public class Aracne {
 
 		// kinase HashSet;
 		String[] kinList = null;
+		boolean dDPI = false;
 		if(kinasesFile!=null){
 			HashSet<String> kinSet = DataParser.readGeneSet(kinasesFile);
 			if(kinSet.size()==0){
@@ -275,6 +276,7 @@ public class Aracne {
 				System.exit(1);
 			}
 			kinList = kinSet.toArray(new String[0]);
+			dDPI = true;
 		}
 
 		// Check if the threshold file exists
@@ -307,7 +309,7 @@ public class Aracne {
 		if(noDPI){
 			removedEdges = new HashMap<String, HashSet<String>>();
 		}else {
-			removedEdges = dpi(finalNetwork, finalNetworkSign, threadCount);
+			removedEdges = dpi(finalNetwork, finalNetworkSign, threadCount, dDPI);
 			System.out.println("DPI time elapsed: "+(System.currentTimeMillis() - time2)/1000+" sec");
 		}
 
@@ -346,9 +348,10 @@ public class Aracne {
 	private static HashMap<String, HashSet<String>> dpi(
 			HashMap<String,	HashMap<String, Double>> finalNet, 
 			HashMap<String, HashMap<String, Boolean>> finalNetSign, 
-			int _threadNumber){
+			int _threadNumber,
+			boolean dDPI){
 		DPI dpi = new DPI();
-		return dpi.dpi(finalNet,finalNetSign,_threadNumber);
+		return dpi.dpi(finalNet,finalNetSign,_threadNumber,dDPI);
 	}
 	
 	// Write results
