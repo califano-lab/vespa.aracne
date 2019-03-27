@@ -31,6 +31,8 @@ public class Aracne {
 	public static void main(String[] args) throws Exception {
 		Locale.setDefault(Locale.US);
 
+		System.out.println("ARACNe (Git revision: " + Aracne.class.getPackage().getImplementationVersion() + ")");
+
 		//// Parse arguments
 		CmdLineParser parser = new CmdLineParser();
 		CmdLineParser.Option optionExpressionFile1 = parser.addStringOption('e', "expfile_upstream");
