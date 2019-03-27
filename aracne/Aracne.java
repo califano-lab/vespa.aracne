@@ -39,7 +39,7 @@ public class Aracne {
 	// Main Method
 	public static void main(String[] args) throws Exception {
 		
-		Logger.global.setLevel(Level.OFF);
+		Logger.getGlobal().setLevel(Level.OFF);
 		
 		Locale.setDefault(Locale.US);
 

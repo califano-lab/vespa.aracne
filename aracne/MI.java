@@ -199,11 +199,11 @@ public class MI {
 						double correlation = new PearsonsCorrelation().correlation(vX,vY);
 						boolean sign =( ((int)Math.signum(correlation)) == 1);
 						
-						Logger.global.info("current regulator: \t" + tfList[tfNumber]);
-						Logger.global.info("current sign: \t " + sign);
+						Logger.getGlobal().info("current regulator: \t" + tfList[tfNumber]);
+						Logger.getGlobal().info("current sign: \t " + sign);
 
 						if(kinaseSet!=null){
-							Logger.global.info("current regulator is Kinase: \t" + kinaseSet.contains( tfList[tfNumber]));
+							Logger.getGlobal().info("current regulator is Kinase: \t" + kinaseSet.contains( tfList[tfNumber]));
 							if(kinaseSet.contains( tfList[tfNumber]) & sign){
 									setMI(tfList[tfNumber], genes[j], mi);
 									setSign(tfList[tfNumber], genes[j], sign);
@@ -347,7 +347,7 @@ public class MI {
 	public double calibrateMIThresholdNA(HashMap<String, DataVector> _data, int randomPaircount, double miPvalue, int _seed){
 		System.out.println("Finding threshold for "+randomPaircount+" gene pairs");
 
-		HashMap<String, DataVector> tempData = (HashMap<String, DataVector>)_data.clone();
+		HashMap<String, DataVector> tempData = new HashMap<String, DataVector>(_data);
 		Random r = new Random(_seed);
 
 		String[] kset = _data.keySet().toArray(new String[0]);
