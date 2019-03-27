@@ -32,9 +32,7 @@ import common.DataVector;
 public class Aracne {
 	// Variable definition
 	static NumberFormat formatter = new DecimalFormat("0.###E0");
-	static float simCut = 0; // In the original paper this was a parameter. E.g. if two TFs have a very high MI, DPI is not calculated
 	static Random random = new Random();
-	private static boolean singlemode = false;
 
 	// Main Method
 	public static void main(String[] args) throws Exception {
@@ -62,7 +60,7 @@ public class Aracne {
 		options.addOption("k", "kinases", true, "");
 		options.addOption("t", "tfs", true, "");
 		options.addOption("p", "pvalue", true, "");
-		options.addOption("g", "geneNumber", true, "");
+		options.addOption("g", "numberOfGenes", true, "");
 		options.addOption("s", "seed", true, "");
 		options.addOption("m", "threads", true, "");
 		options.addOption("v", "consolidatepvalue", true, "");
@@ -79,7 +77,7 @@ public class Aracne {
 		String tfsPath = null;
 		String kinasesPath = null;
 		Double miPvalue = 1E-8;
-		Integer geneNumber = 3000;
+		Integer numberOfGenes = 3000;
 		Integer seed = null;
 		Integer threadCount = 1;
 		Double consolidatePvalue = 0.05; 
@@ -109,8 +107,8 @@ public class Aracne {
 			if (cmd.hasOption("pvalue")) {
 				miPvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
 			}
-			if (cmd.hasOption("geneNumber")) {
-				geneNumber = Integer.parseInt(cmd.getOptionValue("geneNumber"));
+			if (cmd.hasOption("numberOfGenes")) {
+				numberOfGenes = Integer.parseInt(cmd.getOptionValue("numberOfGenes"));
 			}
 			if (cmd.hasOption("seed")) {
 				seed = Integer.parseInt(cmd.getOptionValue("seed"));
@@ -165,7 +163,7 @@ public class Aracne {
 			File expressionFile = new File(expPath);
 			outputFolder.mkdir();
 
-			runThreshold(expressionFile,outputFolder,geneNumber,miPvalue,seed);
+			runThreshold(expressionFile,outputFolder,numberOfGenes,miPvalue,seed);
 		}
 		else if(!isConsolidate){
 			File expressionFile = new File(expPath);
@@ -186,7 +184,6 @@ public class Aracne {
 					processId,
 					miPvalue,
 					threadCount,
-					singlemode,
 					noDPI,
 					nobootstrap
 					);
@@ -195,18 +192,18 @@ public class Aracne {
 		}
 	}
 
-	// Calculate Threshold mode
-	private static void runThreshold(File expressionFile, File outputFolder, int geneNumber, double miPvalue, int seed) throws NumberFormatException, Exception{
-		// Read expression matrix and transcription factor lists
+	// MI Threshold mode
+	private static void runThreshold(File expressionFile, File outputFolder, int numberOfGenes, double miPvalue, int seed) throws NumberFormatException, Exception{
+		// Read expression matrix
 		ExpressionMatrix em = new ExpressionMatrix(expressionFile);
 
 		// Generate ranked data
 		HashMap<String, DataVector> rankData = em.rankDV(random);
 		
-		// Check if the sample size
+		// Check if the sample size is valid
 		int sampleNumber = em.getSamples().size();
 		if(sampleNumber>32767){
-			System.err.println("Warning: sample number is higher than the short data limit");
+			System.err.println("Error: sample number is higher than the short data limit");
 			System.exit(1);
 		}
 
@@ -219,11 +216,11 @@ public class Aracne {
 			System.out.println("MI threshold file was already there, but I am recalculating it.");
 		}
 		MI miCPU = new MI(rankData);
-		miThreshold = miCPU.calibrateMIThresholdNA(rankData,geneNumber,miPvalue,seed);
+		miThreshold = miCPU.calibrateMIThreshold(rankData,numberOfGenes,miPvalue,seed);
 		DataParser.writeValue(miThreshold, miThresholdFile);
 	}
 
-	// Single run mode
+	// ARACNe mode
 	private static void runAracne(
 			File expressionFile,
 			File transcriptionFactorsFile,
@@ -232,7 +229,6 @@ public class Aracne {
 			String processId,
 			Double miPvalue,
 			Integer threadCount,
-			boolean singlemode, // Only one expression matrix was provided
 			boolean noDPI, // Do not use DPI
 			boolean nobootstrap // Do not use bootstrap
 			) throws NumberFormatException, Exception {
@@ -271,13 +267,14 @@ public class Aracne {
 		}
 
 		// kinase HashSet;
-		HashSet<String> kinaseSet = null;
+		String[] kinList = null;
 		if(kinasesFile!=null){
-			kinaseSet = DataParser.readGeneSet(kinasesFile);
-			if(kinaseSet.size()==0){
+			HashSet<String> kinSet = DataParser.readGeneSet(kinasesFile);
+			if(kinSet.size()==0){
 				System.err.println("The kinase regulator file is badly formatted or empty");
 				System.exit(1);
 			}
+			kinList = kinSet.toArray(new String[0]);
 		}
 
 		// Check if the threshold file exists
@@ -297,7 +294,7 @@ public class Aracne {
 		HashMap<String, HashMap<String, Double>> finalNetwork = new HashMap<String, HashMap<String, Double>>();
 		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 
-		MI miCPU = new MI(rankData,tfList,kinaseSet,miThreshold,threadCount);
+		MI miCPU = new MI(rankData,tfList,kinList,miThreshold,threadCount);
 
 		finalNetwork = miCPU.getFinalNetwork();
 		finalNetworkSign = miCPU.getFinalNetworkSign();
@@ -327,7 +324,7 @@ public class Aracne {
 		System.out.println("Total time elapsed: "+(finalTime - initialTime)/1000+" sec");
 	}
 
-	// This method consolidates the several bootstraps
+	// Consolidate mode
 	private static void runConsolidate(File outputFolder, boolean nobonferroni, Double consolidatePvalue) throws IOException {
 		BootstrapConsolidator c = new BootstrapConsolidator(nobonferroni);
 		c.mergeFiles(outputFolder);
@@ -345,10 +342,7 @@ public class Aracne {
 		System.out.println("    \\      /");
 	}
 
-
-	// Method to read the expression file
-	// Method to load the TF list
-	// DPI method
+	// Compute DPI
 	private static HashMap<String, HashSet<String>> dpi(
 			HashMap<String,	HashMap<String, Double>> finalNet, 
 			HashMap<String, HashMap<String, Boolean>> finalNetSign, 
@@ -357,7 +351,7 @@ public class Aracne {
 		return dpi.dpi(finalNet,finalNetSign,_threadNumber);
 	}
 	
-
+	// Write results
 	public static void writeFinal(
 	File finalDPIfile, 
 		HashMap<String, HashSet<String>> removedEdges,
