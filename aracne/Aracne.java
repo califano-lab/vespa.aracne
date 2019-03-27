@@ -41,7 +41,7 @@ public class Aracne {
 		
 		Locale.setDefault(Locale.US);
 
-		System.out.println("ARACNe (revision: " + Aracne.class.getPackage().getImplementationVersion() + ")");
+		System.out.println("ARACNe (" + Aracne.class.getPackage().getImplementationVersion() + ")");
 
 		//// Parse arguments
 		CommandLineParser parser = new DefaultParser();
