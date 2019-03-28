@@ -53,7 +53,7 @@ public class MI {
 		// multi threading here, run threadCount many parallel MI calculations
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<tfList.length; i++){
-			MIThreadNA mt = new MIThreadNA(tfList, kinList, genes, data, miThreshold, i);
+			MIThread mt = new MIThread(tfList, kinList, genes, data, miThreshold, i);
 			executor.execute(mt);
 		}
 
@@ -74,7 +74,7 @@ public class MI {
 		this.setSampleNumber(data.get(genes[0]).values.length);
 	}
 
-	class MIThreadNA extends Thread {
+	class MIThread extends Thread {
 		// Variables
 		private String[] tfList;
 		private String[] kinList;
@@ -84,7 +84,7 @@ public class MI {
 		private int tfNumber;
 
 		// Constructor
-		MIThreadNA(String[] _tfList, String[] _kinList, String[] _genes, HashMap<String, DataVector> _data, double _miThreshold, int _tfNumber) {
+		MIThread(String[] _tfList, String[] _kinList, String[] _genes, HashMap<String, DataVector> _data, double _miThreshold, int _tfNumber) {
 			tfList = _tfList;
 			kinList = _kinList;
 			genes = _genes;
