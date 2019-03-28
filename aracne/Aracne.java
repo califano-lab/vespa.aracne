@@ -238,19 +238,19 @@ public class Aracne {
 		ExpressionMatrix em = new ExpressionMatrix(expressionFile);
 
 		// Generate ranked data
-		HashMap<String, short[]> rankData;
+		HashMap<String, DataVector> rankData;
 
 		// Bootstrap matrix
 		if(!nobootstrap){
 			System.out.println("Bootstrapping input matrix with "+em.getGenes().size()+" genes and "+em.getSamples().size()+" samples");
 			ExpressionMatrix bootstrapped = em.bootstrap(random);
-			rankData = bootstrapped.rank(random);
+			rankData = bootstrapped.rankDV(random);
 		} else {
-			rankData = em.rank(random);
+			rankData = em.rankDV(random);
 		}
 
 		// Check if the sample size is less than the short limit
-		int sampleNumber = rankData.get(rankData.keySet().toArray()[0]).length;
+		int sampleNumber = rankData.get(rankData.keySet().toArray()[0]).values.length;
 		if(sampleNumber>32767){
 			System.err.println("Warning: sample number is higher than the short data limit");
 			System.exit(1);

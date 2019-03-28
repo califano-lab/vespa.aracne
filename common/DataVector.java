@@ -68,6 +68,13 @@ public class DataVector {
 				j++;		
 			}
 		}
+
+		// Rerank if necessary
+		if (lengthOfNotNAsInBoth != values.length){
+			notNA1 = reRankVector(notNA1);
+			notNA2 = reRankVector(notNA2);
+		}
+
 		output.add(notNA1);
 		output.add(notNA2);
 		output.add(bothNAs);
@@ -76,98 +83,19 @@ public class DataVector {
 
 		return output;
 	}
-	
-	
-	public short[] getNotNAvalues() {
-		int length = 0;
-		for(int i=0; i<NAs.length; i++){
-			if(NAs[i]==false){
-				length++;
-			}
-		}
-		
-		short [] notNAvalues = new short[length];
-		int j = 0;
-		for(int i=0; i<NAs.length; i++){
-			if(NAs[i]==false){
-				notNAvalues[j] = values[i];
-				j++;		
-			}
-		}
-		return notNAvalues;
-	}
-	
-	public ArrayList<short[]> getNotNAsInBoth(DataVector x){
-		int length = 0;
-		for(int i=0; i<NAs.length; i++){
-			if(NAs[i]==false & x.NAs[i]==false){
-				length++;
-			}
-		}
-	
-		short [] notNA1 = new short[length];
-		short [] notNA2 = new short[length];
-		int j = 0;
-		for(int i=0; i<NAs.length; i++){
-			if(NAs[i]==false & x.NAs[i]==false){
-				notNA1[j] = values[i];
-				notNA2[j] = x.values[i];
-				j++;		
-			}
-		}
-		ArrayList<short[]> output = new ArrayList<short[]>();
-		output.add(notNA1);
-		output.add(notNA2);
-		return output;
-	}
 
-	
-	public ArrayList<short[]> getNotNAsInFirst(DataVector x){
-		int length = 0;
-		for(int i=0; i<NAs.length; i++){
-			if(NAs[i]==false & x.NAs[i]==true){
-				length++;
+	public static short[] reRankVector(short[] inputVector){
+		short[] rankVector = new short[inputVector.length];
+		for(int i=0; i<inputVector.length; i++){
+			int counter = 1;
+			for(int j=0; j<inputVector.length; j++){
+				if(inputVector[i] > inputVector[j]){
+					counter++;
+				}
 			}
+			rankVector[i] = (short)counter;
 		}
-	
-		short [] notNA1 = new short[length];
-		short [] NA2 = new short[length];
-		int j = 0;
-		for(int i=0; i<NAs.length; i++){
-			if(NAs[i]==false & x.NAs[i]==true){
-				notNA1[j] = values[i];
-				NA2[j] = x.values[i];
-				j++;		
-			}
-		}
-		ArrayList<short[]> output = new ArrayList<short[]>();
-		output.add(notNA1);
-		output.add(NA2);
-		return output;
-	}
-
-	public ArrayList<short[]> getNotNAsInSecond(DataVector x){
-		int length = 0;
-		for(int i=0; i<NAs.length; i++){
-			if(NAs[i]==true & x.NAs[i]==false){
-				length++;
-			}
-		}
-	
-		short [] NA1 = new short[length];
-		short [] notNA2 = new short[length];
-		int j = 0;
-		for(int i=0; i<NAs.length; i++){
-			if(NAs[i]==true & x.NAs[i]==false){
-				NA1[j] = values[i];
-				notNA2[j] = x.values[i];
-				j++;		
-			}
-		}
-		ArrayList<short[]> output = new ArrayList<short[]>();
-		output.add(NA1);
-		output.add(notNA2);
-		return output;
-	}
-	
+		return rankVector;
+	}	
 }
+
