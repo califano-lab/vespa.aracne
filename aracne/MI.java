@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Logger;
 
 import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
 
@@ -100,7 +99,7 @@ public class MI {
 					DataVector vectorX = data.get(tfList[tfNumber]);
 					DataVector vectorY = data.get(genes[j]);
 
-					double mi = quandrantMI(vectorX,vectorY);		// mutithread
+					double mi = quandrantMI(vectorX,vectorY);		// multithread
 
 					// adaptive.miThresh supplants micut
 					if(mi >= miThreshold){
@@ -113,24 +112,27 @@ public class MI {
 						double[] vY = new double[valuesY.length];
 						vY = castShort2Double(valuesY);
 						
-						double correlation = new SpearmansCorrelation().correlation(vX,vY);
-						boolean sign =( ((int)Math.signum(correlation)) == 1);
+						double correlation = 0.0;
+						// We need at least two data points to assess correlation. If not, we drop the interaction.
+						if (vX.length > 1) {
+							correlation = new SpearmansCorrelation().correlation(vX,vY);
+						}
 						
-						Logger.getGlobal().info("current regulator: \t" + tfList[tfNumber]);
-						Logger.getGlobal().info("current sign: \t " + sign);
-
-						if(kinList!=null){
-							Logger.getGlobal().info("current regulator is Kinase: \t" + Arrays.asList(kinList).contains( tfList[tfNumber]));
-							if(Arrays.asList(kinList).contains( tfList[tfNumber]) & sign){
-									setMI(tfList[tfNumber], genes[j], mi);
-									setSign(tfList[tfNumber], genes[j], sign);
-							}else if((!Arrays.asList(kinList).contains( tfList[tfNumber])) & !sign){
-									setMI(tfList[tfNumber], genes[j], mi);
-									setSign(tfList[tfNumber], genes[j], sign);
+						if (correlation!=0.0){
+							// Compute sign from correlation
+							boolean sign =( ((int)Math.signum(correlation)) == 1);
+							if(kinList!=null){
+								if(Arrays.asList(kinList).contains( tfList[tfNumber]) & sign){
+										setMI(tfList[tfNumber], genes[j], mi);
+										setSign(tfList[tfNumber], genes[j], sign);
+								}else if((!Arrays.asList(kinList).contains( tfList[tfNumber])) & !sign){
+										setMI(tfList[tfNumber], genes[j], mi);
+										setSign(tfList[tfNumber], genes[j], sign);
+								}
+							}else{
+								setMI(tfList[tfNumber], genes[j], mi);
+								setSign(tfList[tfNumber], genes[j], sign);
 							}
-						}else{
-							setMI(tfList[tfNumber], genes[j], mi);
-							setSign(tfList[tfNumber], genes[j], sign);
 						}
 					}
 				}
