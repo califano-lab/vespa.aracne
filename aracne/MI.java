@@ -109,7 +109,7 @@ public class MI {
 					DataVector vectorX = data.get(regulators[regulatorNumber]);
 					DataVector vectorY = data.get(genes[j]);
 
-					double mi = quandrantMI(vectorX,vectorY);		// multithread
+					double mi = quadrantMI(vectorX,vectorY);		// multithread
 
 					// adaptive.miThresh supplants micut
 					if(mi >= miThreshold){
@@ -196,7 +196,7 @@ public class MI {
 		for(int i=0; i<regulators.length; i++){
 			for(int j=0; j<genes.length; j++){
 				if(!genes[j].equals(regulators[i])){
-					mit.add(quandrantMI(tempData.get(regulators[i]), tempData.get(genes[j])));
+					mit.add(quadrantMI(tempData.get(regulators[i]), tempData.get(genes[j])));
 				}
 			}
 		}
@@ -252,7 +252,7 @@ public class MI {
 	}
 
 	// Obtain quandrants and independently assess MI
-	public static double quandrantMI(DataVector vectorX, DataVector vectorY){
+	public static double quadrantMI(DataVector vectorX, DataVector vectorY){
 		// Preranked matrices for candidate interactors might not overlap perfectly, thus requires reranking
 		ArrayList<short[]> splitQuad = vectorX.getQuadrants(vectorY);
 		short[] valuesX = splitQuad.get(0);
