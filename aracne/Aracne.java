@@ -47,34 +47,28 @@ public class Aracne {
 		options.addOption("c", "consolidate", false, "Run ARACNe in consolidation mode");
 		options.addOption("n", "nodpi", false, "Run ARACNe without DPI");
 		options.addOption("b", "nobootstrap", false, "Run ARACNe without bootstrapping");
-		options.addOption("r", "nobonferroni", false, "Run ARACNe without Bonferroni correction");
 
 		// Arguments with values
 		options.addOption("e", "expfile", true, "Expression Matrix (M x N); M=genes, N=samples; Designate missing values with NA");
 		options.addOption("o", "output", true, "Output directory");
-		options.addOption("k", "kinases", true, "Kinase identifier file; enables phosphoproteomics dDPI");
 		options.addOption("t", "tfs", true, "Regulator identifier file (transcription factors or kinases/phosphatases)");
-		options.addOption("f", "fwer", true, "Threshold mode: family-wise error-rate");
-		options.addOption("g", "numberOfGenes", true, "Threshold mode: Number of randomly sampled genes [default: 3000]");
+		options.addOption("k", "kinases", true, "Kinase identifier file; enables phosphoproteomics dDPI");
+		options.addOption("f", "fwer", true, "Family-wise error-rate [default: 0.05]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("m", "threads", true, "Number of threads to use [default: 1]");
-		options.addOption("v", "consolidatepvalue", true, "Bootstrapping: p-value threshold for the Poisson test of edge significance [default: 0.05]");
 
 		// Default arguments
 		boolean isConsolidate = false;
 		boolean noDPI = false;
 		boolean nobootstrap = false;
-		boolean nobonferroni = false;
 
 		String expPath = null;
 		String outputPath = null;
 		String tfsPath = null;
 		String kinasesPath = null;
 		Double fwer = 0.05;
-		Integer numberOfGenes = 3000;
 		Integer seed = null;
 		Integer threadCount = 1;
-		Double consolidatePvalue = 0.05; 
 
 		// Parse arguments
 		try {
@@ -89,17 +83,8 @@ public class Aracne {
 			if (cmd.hasOption("nobootstrap")) {
 				nobootstrap = true;
 			}
-			if (cmd.hasOption("nobonferroni")) {
-				nobonferroni = true;
-			}
-			if (cmd.hasOption("consolidatepvalue")) {
-				consolidatePvalue = Double.parseDouble(cmd.getOptionValue("consolidatepvalue"));
-			}
 			if (cmd.hasOption("fwer")) {
 				fwer = Double.parseDouble(cmd.getOptionValue("fwer"));
-			}
-			if (cmd.hasOption("numberOfGenes")) {
-				numberOfGenes = Integer.parseInt(cmd.getOptionValue("numberOfGenes"));
 			}
 			if (cmd.hasOption("seed")) {
 				seed = Integer.parseInt(cmd.getOptionValue("seed"));
@@ -170,7 +155,7 @@ public class Aracne {
 					seed
 					);
 		} else {
-			runConsolidate(outputFolder,nobonferroni,consolidatePvalue);
+			runConsolidate(outputFolder);
 		}
 	}
 
@@ -283,15 +268,17 @@ public class Aracne {
 	}
 
 	// Consolidate mode
-	private static void runConsolidate(File outputFolder, boolean nobonferroni, Double consolidatePvalue) throws IOException {
-		BootstrapConsolidator c = new BootstrapConsolidator(nobonferroni);
-		c.mergeFiles(outputFolder);
-		String outputFile = outputFolder+"/network.txt";
+	private static void runConsolidate(File outputFolder) throws IOException {
+		BootstrapConsolidator c = new BootstrapConsolidator();
+		// Merge MI threshold files
+		c.mergeMIT(outputFolder);
 
-		
-		// consolidatePvalue is the P-value for the Poisson distribution. Aka how many times an edge has to appear in the bootstraps to be kept.
-		// Hard-coded to 0.3 in the original ARACNe
-		c.writeSignificant(outputFile, consolidatePvalue);
+		// Merge network files
+		c.mergeNetworks(outputFolder);
+
+		// Write significant edges
+		String outputFile = outputFolder+"/network.txt";
+		c.writeNetwork(outputFile);
 
 		System.out.println("\n        :");
 		System.out.println("       :");
