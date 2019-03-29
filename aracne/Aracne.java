@@ -45,7 +45,6 @@ public class Aracne {
 
 		// Flag arguments
 		options.addOption("c", "consolidate", false, "Run ARACNe in consolidation mode");
-		options.addOption("j", "calculateThreshold", false, "Run ARACNe in MI threshold calculation mode");
 		options.addOption("n", "nodpi", false, "Run ARACNe without DPI");
 		options.addOption("b", "nobootstrap", false, "Run ARACNe without bootstrapping");
 		options.addOption("r", "nobonferroni", false, "Run ARACNe without Bonferroni correction");
@@ -63,7 +62,6 @@ public class Aracne {
 
 		// Default arguments
 		boolean isConsolidate = false;
-		boolean isThreshold = false;
 		boolean noDPI = false;
 		boolean nobootstrap = false;
 		boolean nobonferroni = false;
@@ -84,9 +82,6 @@ public class Aracne {
 
 			if (cmd.hasOption("consolidate")) {
 				isConsolidate = true;
-			}
-			if (cmd.hasOption("calculateThreshold")) {
-				isThreshold = true;
 			}
 			if (cmd.hasOption("nodpi")) {
 				noDPI = true;
@@ -148,22 +143,14 @@ public class Aracne {
 		}
 
 		// Here the program forks
-		// You can calculate the MI threshold
 		// You can run a single bootstrap (or non bootstrap)
 		// You can consolidate bootstraps
-
-		if(isThreshold){
+		if(!isConsolidate){
 			File expressionFile = new File(expPath);
 			File tfFile = new File(tfsPath);
 			outputFolder.mkdir();
 
-			runThreshold(expressionFile,tfFile,outputFolder,numberOfGenes,fwer,seed);
-		}
-		else if(!isConsolidate){
-			File expressionFile = new File(expPath);
-			File tfFile = new File(tfsPath);
-
-			// if kinases file is present, proteomic-mode is enabled.
+			// If kinases file is present, proteomic-mode is enabled.
 			File kinasesFile = null;
 			if(kinasesPath != null){
 				kinasesFile = new File(kinasesPath);
@@ -179,55 +166,12 @@ public class Aracne {
 					fwer,
 					threadCount,
 					noDPI,
-					nobootstrap
+					nobootstrap,
+					seed
 					);
 		} else {
 			runConsolidate(outputFolder,nobonferroni,consolidatePvalue);
 		}
-	}
-
-	// MI Threshold mode
-	private static void runThreshold(File expressionFile, File transcriptionFactorsFile, File outputFolder, int numberOfGenes, double fwer, int seed) throws NumberFormatException, Exception{
-		// Read expression matrix
-		ExpressionMatrix em = new ExpressionMatrix(expressionFile);
-
-		// Generate ranked data
-		HashMap<String, DataVector> rankData = em.rankDV(random);
-
-		// TF list
-		HashSet<String> tfSet = DataParser.readGeneSet(transcriptionFactorsFile);
-		String[] tfList = tfSet.toArray(new String[0]);
-		Arrays.sort(tfList);
-
-		if(tfList.length==0){
-			System.err.println("The regulator file is badly formatted or empty");
-			System.exit(1);
-		}
-		
-		// Check if the sample size is valid
-		int sampleNumber = em.getSamples().size();
-		if(sampleNumber>32767){
-			System.err.println("Error: sample number is higher than the short data limit");
-			System.exit(1);
-		}
-		int geneNumber = em.getGenes().size();
-
-		//// Calculate threshold for the required p-value
-		// Don't if a threshold file already exists
-		File miThresholdFile = new File(outputFolder+"/fwer_"+formatter.format(fwer)+"_samples"+sampleNumber+".txt");
-		double miThreshold;
-
-		if(miThresholdFile.exists()){
-			System.out.println("MI threshold file was already there, but I am recalculating it.");
-		}
-
-		// Compute miPvalue
-		double miPvalue = fwer / (tfSet.size() * geneNumber-1);
-		System.out.println("Estimating MI threshold p-value for "+tfSet.size()+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
-
-		MI miCPU = new MI(rankData);
-		miThreshold = miCPU.calibrateMIThreshold(rankData,numberOfGenes,miPvalue,seed);
-		DataParser.writeValue(miThreshold, miThresholdFile);
 	}
 
 	// ARACNe mode
@@ -240,7 +184,8 @@ public class Aracne {
 			Double fwer,
 			Integer threadCount,
 			boolean noDPI, // Do not use DPI
-			boolean nobootstrap // Do not use bootstrap
+			boolean nobootstrap, // Do not use bootstrap
+			Integer seed
 			) throws NumberFormatException, Exception {
 		long initialTime = System.currentTimeMillis();
 
@@ -289,16 +234,17 @@ public class Aracne {
 			dDPI = true;
 		}
 
-		// Check if the threshold file exists
-		File miThresholdFile = new File(outputFolder+"/fwer_"+formatter.format(fwer)+"_samples"+sampleNumber+".txt");
-		double miThreshold;
-		if(!miThresholdFile.exists()){
-			System.err.println("MI threshold file is not present.");
-			System.err.println("Please run ARACNE in --calculateThreshold mode first");
-			System.exit(1);
-		}
-		System.out.println("MI threshold file is present");
-		miThreshold = DataParser.readValue(miThresholdFile);
+		// Compute MI threshold
+		int geneNumber = em.getGenes().size();
+
+		// Compute miPvalue
+		double miPvalue = fwer / (tfSet.size() * geneNumber-1);
+		System.out.println("Estimating MI threshold p-value for "+tfSet.size()+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
+
+		MI miTCPU = new MI(rankData,tfList);
+		double miThreshold = miTCPU.calibrateMIThreshold(rankData,miPvalue,seed);
+		File miThresholdFile = new File(outputFolder.getAbsolutePath()+"/bootstrapMIThreshold_"+processId+".txt");
+		DataParser.writeValue(miThreshold, miThresholdFile);
 
 		// Calculate a single ARACNE (using the APAC4 implementation by Alex)
 		long time1 = System.currentTimeMillis();
@@ -306,7 +252,7 @@ public class Aracne {
 		HashMap<String, HashMap<String, Double>> finalNetwork = new HashMap<String, HashMap<String, Double>>();
 		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 
-		MI miCPU = new MI(rankData,tfList,kinList,miThreshold,threadCount);
+		MI miCPU = new MI(rankData,tfList,kinList,threadCount);
 
 		finalNetwork = miCPU.getFinalNetwork();
 		finalNetworkSign = miCPU.getFinalNetworkSign();
