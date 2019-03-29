@@ -4,14 +4,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Logger;
 
 public class DPI {
 
 	public DPI(){
 		
 	}
-		
+
 	public HashMap<String, HashSet<String>> dpi(
 			HashMap<String, HashMap<String, Double>> finalNet,
 			HashMap<String, HashMap<String, Boolean>> finalNetSign,
@@ -120,9 +119,6 @@ public class DPI {
 			HashMap<String, Boolean> tft1Sign = tftfNetworkSign.get(transcriptionFactors[i]);
 			HashSet<String> rem1 = removedEdges.get(transcriptionFactors[i]);
 			
-			Logger.getGlobal().info("NUMBER of TFs \t  "	+ transcriptionFactors.length + 
-					" number target of I \t" + targetsOfI.size());
-			
 			for (int j = i + 1; j < transcriptionFactors.length; j++) {
 				// And if the second TF has an edge with the first TF...
 				if (tft1.containsKey(transcriptionFactors[j])) {
@@ -142,29 +138,19 @@ public class DPI {
 					double tftfMI = tft1.get(transcriptionFactors[j]);
 					boolean tftfMISign = tft1Sign.get(transcriptionFactors[j]);
 					
-					Logger.getGlobal().info("TF-TF:\t number of targets \t last one" 
-										+ transcriptionFactors[j] + "\t" 
-										+ targetsOfJ.size());
-
-
 					// Loop over the common targets
 					for (String target : targetsOfJ){
-						Logger.getGlobal().info("target:\t " + target );
-
 						double v1 = fin1.get(target);
 						double v2 = fin2.get(target);
 						
 						boolean s1 = fin1Sign.get(target);
 						boolean s2 = fin2Sign.get(target);
-						Logger.getGlobal().info("tftf v1 v2 mis:\t" + tftfMI + "\t"+ v1 + "\t"+ v2 );
-						Logger.getGlobal().info("Sign of tftf v1 v2 mis:\t" + tftfMISign +"\t" + s1 +"\t"+ s2 );
 
 						// apply directional DPI for regulators with known sign of action
 						if (dDPI)
 						{
 							// regulator is positive correlation
 							if (tftfMISign & (s1 == s2)){
-								Logger.getGlobal().info("DPI for + + +:\t" );
 								if (v1 < tftfMI && v1 < v2) {
 									synchronized(rem1){
 										rem1.add(target);
@@ -176,7 +162,6 @@ public class DPI {
 								}
 							}else if( (!tftfMISign) & (s1 != s2)){
 							// regulator is negative correlation
-								Logger.getGlobal().info("DPI for - + -:\t" );
 								if (v1 < tftfMI && v1 < v2) {
 									synchronized(rem1){
 										rem1.add(target);

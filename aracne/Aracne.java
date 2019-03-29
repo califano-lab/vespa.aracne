@@ -20,8 +20,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Random;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import aracne.BootstrapConsolidator;
 import common.DataParser;
@@ -36,9 +34,7 @@ public class Aracne {
 
 	// Main Method
 	public static void main(String[] args) throws Exception {
-		
-		Logger.getGlobal().setLevel(Level.OFF);
-		
+
 		Locale.setDefault(Locale.US);
 
 		System.out.println("ARACNe (" + Aracne.class.getPackage().getImplementationVersion() + ")");
