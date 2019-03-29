@@ -55,7 +55,7 @@ public class Aracne {
 		options.addOption("o", "output", true, "Output directory");
 		options.addOption("k", "kinases", true, "Kinase identifier file; enables phosphoproteomics dDPI");
 		options.addOption("t", "tfs", true, "Regulator identifier file (transcription factors or kinases/phosphatases)");
-		options.addOption("p", "pvalue", true, "Threshold mode: p-value threshold for MI significance");
+		options.addOption("f", "fwer", true, "Threshold mode: family-wise error-rate");
 		options.addOption("g", "numberOfGenes", true, "Threshold mode: Number of randomly sampled genes [default: 3000]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("m", "threads", true, "Number of threads to use [default: 1]");
@@ -72,7 +72,7 @@ public class Aracne {
 		String outputPath = null;
 		String tfsPath = null;
 		String kinasesPath = null;
-		Double miPvalue = 1E-8;
+		Double fwer = 0.05;
 		Integer numberOfGenes = 3000;
 		Integer seed = null;
 		Integer threadCount = 1;
@@ -100,8 +100,8 @@ public class Aracne {
 			if (cmd.hasOption("consolidatepvalue")) {
 				consolidatePvalue = Double.parseDouble(cmd.getOptionValue("consolidatepvalue"));
 			}
-			if (cmd.hasOption("pvalue")) {
-				miPvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
+			if (cmd.hasOption("fwer")) {
+				fwer = Double.parseDouble(cmd.getOptionValue("fwer"));
 			}
 			if (cmd.hasOption("numberOfGenes")) {
 				numberOfGenes = Integer.parseInt(cmd.getOptionValue("numberOfGenes"));
@@ -126,13 +126,10 @@ public class Aracne {
 			}
 
 			if (isConsolidate && outputPath==null) {
-				throw new ParseException("Missing required option for consolidation mode: output");
+				throw new ParseException("Required option: output");
 			}
-			else if (isThreshold && (outputPath==null || expPath==null)) {
-				throw new ParseException("Missing required options for finding MI threshold mode: expfile or output");
-			}
-			else if (!isConsolidate && !isThreshold && (outputPath==null || expPath==null || tfsPath==null)) {
-				throw new ParseException("Missing required options for primary mode: expfile, tfs or output");
+			else if (!isConsolidate && (outputPath==null || expPath==null || tfsPath==null)) {
+				throw new ParseException("Required options: expfile, tfs and output");
 			}
 
 		} catch( ParseException exp ) {
@@ -157,9 +154,10 @@ public class Aracne {
 
 		if(isThreshold){
 			File expressionFile = new File(expPath);
+			File tfFile = new File(tfsPath);
 			outputFolder.mkdir();
 
-			runThreshold(expressionFile,outputFolder,numberOfGenes,miPvalue,seed);
+			runThreshold(expressionFile,tfFile,outputFolder,numberOfGenes,fwer,seed);
 		}
 		else if(!isConsolidate){
 			File expressionFile = new File(expPath);
@@ -178,7 +176,7 @@ public class Aracne {
 					kinasesFile,
 					outputFolder,
 					processId,
-					miPvalue,
+					fwer,
 					threadCount,
 					noDPI,
 					nobootstrap
@@ -189,12 +187,22 @@ public class Aracne {
 	}
 
 	// MI Threshold mode
-	private static void runThreshold(File expressionFile, File outputFolder, int numberOfGenes, double miPvalue, int seed) throws NumberFormatException, Exception{
+	private static void runThreshold(File expressionFile, File transcriptionFactorsFile, File outputFolder, int numberOfGenes, double fwer, int seed) throws NumberFormatException, Exception{
 		// Read expression matrix
 		ExpressionMatrix em = new ExpressionMatrix(expressionFile);
 
 		// Generate ranked data
 		HashMap<String, DataVector> rankData = em.rankDV(random);
+
+		// TF list
+		HashSet<String> tfSet = DataParser.readGeneSet(transcriptionFactorsFile);
+		String[] tfList = tfSet.toArray(new String[0]);
+		Arrays.sort(tfList);
+
+		if(tfList.length==0){
+			System.err.println("The regulator file is badly formatted or empty");
+			System.exit(1);
+		}
 		
 		// Check if the sample size is valid
 		int sampleNumber = em.getSamples().size();
@@ -202,15 +210,21 @@ public class Aracne {
 			System.err.println("Error: sample number is higher than the short data limit");
 			System.exit(1);
 		}
+		int geneNumber = em.getGenes().size();
 
 		//// Calculate threshold for the required p-value
 		// Don't if a threshold file already exists
-		File miThresholdFile = new File(outputFolder+"/miThreshold_p"+formatter.format(miPvalue)+"_samples"+sampleNumber+".txt");
+		File miThresholdFile = new File(outputFolder+"/fwer_"+formatter.format(fwer)+"_samples"+sampleNumber+".txt");
 		double miThreshold;
 
 		if(miThresholdFile.exists()){
 			System.out.println("MI threshold file was already there, but I am recalculating it.");
 		}
+
+		// Compute miPvalue
+		double miPvalue = fwer / (tfSet.size() * geneNumber-1);
+		System.out.println("Estimating MI threshold p-value for "+tfSet.size()+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
+
 		MI miCPU = new MI(rankData);
 		miThreshold = miCPU.calibrateMIThreshold(rankData,numberOfGenes,miPvalue,seed);
 		DataParser.writeValue(miThreshold, miThresholdFile);
@@ -223,7 +237,7 @@ public class Aracne {
 			File kinasesFile,
 			File outputFolder, 
 			String processId,
-			Double miPvalue,
+			Double fwer,
 			Integer threadCount,
 			boolean noDPI, // Do not use DPI
 			boolean nobootstrap // Do not use bootstrap
@@ -276,7 +290,7 @@ public class Aracne {
 		}
 
 		// Check if the threshold file exists
-		File miThresholdFile = new File(outputFolder+"/miThreshold_p"+formatter.format(miPvalue)+"_samples"+sampleNumber+".txt");
+		File miThresholdFile = new File(outputFolder+"/fwer_"+formatter.format(fwer)+"_samples"+sampleNumber+".txt");
 		double miThreshold;
 		if(!miThresholdFile.exists()){
 			System.err.println("MI threshold file is not present.");
