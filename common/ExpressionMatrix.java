@@ -66,6 +66,10 @@ public class ExpressionMatrix {
 		genes = new ArrayList<String>();
 		samples = new ArrayList<String>();
 
+		if(samples.size()>32767){
+			throw new IOException("The number of samples is higher than the maximum supported by the short data type.");
+		}
+
 		int i = 0;
 		while ((strLine = br.readLine()) != null) {
 			String[] splitter = strLine.split("\t");
@@ -112,6 +116,7 @@ public class ExpressionMatrix {
 			rankData.put(gene, values);
 			i++;
 		}
+
 		return(rankData);
 	}
 

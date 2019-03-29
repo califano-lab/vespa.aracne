@@ -1,6 +1,5 @@
 package aracne;
 
-import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.CommandLineParser;
@@ -45,21 +44,20 @@ public class Aracne {
 
 		// Flag arguments
 		options.addOption("c", "consolidate", false, "Run ARACNe in consolidation mode");
-		options.addOption("j", "calculateThreshold", false, "Run ARACNe in MI threshold calculation mode");
-		options.addOption("n", "nodpi", false, "Run ARACNe without DPI");
-		options.addOption("b", "nobootstrap", false, "Run ARACNe without bootstrapping");
-		options.addOption("r", "nobonferroni", false, "Run ARACNe without Bonferroni correction");
+		options.addOption("t", "threshold", false, "Run ARACNe in MI threshold calculation mode");
+		options.addOption("nd", "nodpi", false, "Run ARACNe without DPI");
+		options.addOption("nb", "nobootstrap", false, "Run ARACNe without bootstrapping");
+		options.addOption("nm", "nobonferroni", false, "Run ARACNe without Bonferroni correction");
 
 		// Arguments with values
 		options.addOption("e", "expfile", true, "Expression Matrix (M x N); M=genes, N=samples; Designate missing values with NA");
 		options.addOption("o", "output", true, "Output directory");
-		options.addOption("k", "kinases", true, "Kinase identifier file; enables phosphoproteomics dDPI");
-		options.addOption("t", "tfs", true, "Regulator identifier file (transcription factors or kinases/phosphatases)");
+		options.addOption("r", "regulators", true, "Regulator identifier file (e.g. transcription factors or kinases & phosphatases)");
+		options.addOption("a", "activators", true, "Activator identifier file (e.g. kinases)");
 		options.addOption("f", "fwer", true, "Threshold mode: family-wise error-rate [default: 0.05]");
-		options.addOption("g", "numberOfGenes", true, "Threshold mode: Number of randomly sampled genes [default: 3000]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
-		options.addOption("m", "threads", true, "Number of threads to use [default: 1]");
-		options.addOption("v", "consolidatepvalue", true, "Bootstrapping: p-value threshold for the Poisson test of edge significance [default: 0.05]");
+		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
+		options.addOption("p", "pvalue", true, "Bootstrapping: p-value threshold for the Poisson test of edge significance [default: 0.05]");
 
 		// Default arguments
 		boolean isConsolidate = false;
@@ -70,13 +68,13 @@ public class Aracne {
 
 		String expPath = null;
 		String outputPath = null;
-		String tfsPath = null;
-		String kinasesPath = null;
+		String regulatorsPath = null;
+		String activatorsPath = null;
 		Double fwer = 0.05;
 		Integer numberOfGenes = 3000;
 		Integer seed = null;
 		Integer threadCount = 1;
-		Double consolidatePvalue = 0.05; 
+		Double pvalue = 0.05; 
 
 		// Parse arguments
 		try {
@@ -85,7 +83,7 @@ public class Aracne {
 			if (cmd.hasOption("consolidate")) {
 				isConsolidate = true;
 			}
-			if (cmd.hasOption("calculateThreshold")) {
+			if (cmd.hasOption("threshold")) {
 				isThreshold = true;
 			}
 			if (cmd.hasOption("nodpi")) {
@@ -97,14 +95,11 @@ public class Aracne {
 			if (cmd.hasOption("nobonferroni")) {
 				nobonferroni = true;
 			}
-			if (cmd.hasOption("consolidatepvalue")) {
-				consolidatePvalue = Double.parseDouble(cmd.getOptionValue("consolidatepvalue"));
+			if (cmd.hasOption("pvalue")) {
+				pvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
 			}
 			if (cmd.hasOption("fwer")) {
 				fwer = Double.parseDouble(cmd.getOptionValue("fwer"));
-			}
-			if (cmd.hasOption("numberOfGenes")) {
-				numberOfGenes = Integer.parseInt(cmd.getOptionValue("numberOfGenes"));
 			}
 			if (cmd.hasOption("seed")) {
 				seed = Integer.parseInt(cmd.getOptionValue("seed"));
@@ -118,18 +113,18 @@ public class Aracne {
 			if (cmd.hasOption("output")) {
 				outputPath = (String)cmd.getOptionValue("output");
 			}
-			if (cmd.hasOption("tfs")) {
-				tfsPath = (String)cmd.getOptionValue("tfs");
+			if (cmd.hasOption("regulators")) {
+				regulatorsPath = (String)cmd.getOptionValue("regulators");
 			}
-			if (cmd.hasOption("kinases")) {
-				kinasesPath = (String)cmd.getOptionValue("kinases");
+			if (cmd.hasOption("activators")) {
+				activatorsPath = (String)cmd.getOptionValue("activators");
 			}
 
 			if (isConsolidate && outputPath==null) {
 				throw new ParseException("Required option: output");
 			}
-			else if (!isConsolidate && (outputPath==null || expPath==null || tfsPath==null)) {
-				throw new ParseException("Required options: expfile, tfs and output");
+			else if (!isConsolidate && (outputPath==null || expPath==null || regulatorsPath==null)) {
+				throw new ParseException("Required options: expfile, regulators and output");
 			}
 
 		} catch( ParseException exp ) {
@@ -147,33 +142,47 @@ public class Aracne {
 			random = new Random();
 		}
 
+		// Read expression matrix if present
+		File expressionFile = null;
+		ExpressionMatrix em = null;
+		if(expPath != null){
+			expressionFile = new File(expPath);
+			em = new ExpressionMatrix(expressionFile);
+		}
+
+		// Read regulators file if present
+		File regulatorsFile = null;
+		String[] regulators = null;
+		if(regulatorsPath != null){
+			regulatorsFile = new File(regulatorsPath);
+			regulators = DataParser.readGeneSet(regulatorsFile, em.getGenes());
+		}
+
+		// Read activators file if present
+		File activatorsFile = null;
+		String[] activators = null;
+		if(activatorsPath != null){
+			activatorsFile = new File(activatorsPath);
+			activators = DataParser.readGeneSet(activatorsFile, em.getGenes());
+		}
+
 		// Here the program forks
 		// You can calculate the MI threshold
 		// You can run a single bootstrap (or non bootstrap)
 		// You can consolidate bootstraps
 
 		if(isThreshold){
-			File expressionFile = new File(expPath);
-			File tfFile = new File(tfsPath);
 			outputFolder.mkdir();
 
-			runThreshold(expressionFile,tfFile,outputFolder,numberOfGenes,fwer,seed);
+			runThreshold(em,regulators,outputFolder,fwer,seed);
 		}
 		else if(!isConsolidate){
-			File expressionFile = new File(expPath);
-			File tfFile = new File(tfsPath);
-
-			// if kinases file is present, proteomic-mode is enabled.
-			File kinasesFile = null;
-			if(kinasesPath != null){
-				kinasesFile = new File(kinasesPath);
-			}
-
 			String processId = new BigInteger(130, random).toString(32);
+
 			runAracne(
-					expressionFile,
-					tfFile,
-					kinasesFile,
+					em,
+					regulators,
+					activators,
 					outputFolder,
 					processId,
 					fwer,
@@ -182,34 +191,16 @@ public class Aracne {
 					nobootstrap
 					);
 		} else {
-			runConsolidate(outputFolder,nobonferroni,consolidatePvalue);
+			runConsolidate(outputFolder,nobonferroni,pvalue);
 		}
 	}
 
 	// MI Threshold mode
-	private static void runThreshold(File expressionFile, File transcriptionFactorsFile, File outputFolder, int numberOfGenes, double fwer, int seed) throws NumberFormatException, Exception{
-		// Read expression matrix
-		ExpressionMatrix em = new ExpressionMatrix(expressionFile);
-
+	private static void runThreshold(ExpressionMatrix em, String[] regulators, File outputFolder, double fwer, int seed) throws NumberFormatException, Exception{
 		// Generate ranked data
 		HashMap<String, DataVector> rankData = em.rankDV(random);
 
-		// TF list
-		HashSet<String> tfSet = DataParser.readGeneSet(transcriptionFactorsFile);
-		String[] tfList = tfSet.toArray(new String[0]);
-		Arrays.sort(tfList);
-
-		if(tfList.length==0){
-			System.err.println("The regulator file is badly formatted or empty");
-			System.exit(1);
-		}
-		
-		// Check if the sample size is valid
 		int sampleNumber = em.getSamples().size();
-		if(sampleNumber>32767){
-			System.err.println("Error: sample number is higher than the short data limit");
-			System.exit(1);
-		}
 		int geneNumber = em.getGenes().size();
 
 		//// Calculate threshold for the required p-value
@@ -222,19 +213,19 @@ public class Aracne {
 		}
 
 		// Compute miPvalue
-		double miPvalue = fwer / (tfSet.size() * geneNumber-1);
-		System.out.println("Estimating MI threshold p-value for "+tfSet.size()+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
+		double miPvalue = fwer / (regulators.length * geneNumber-1);
+		System.out.println("Estimating MI threshold p-value for "+regulators.length+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
 
-		MI miCPU = new MI(rankData);
-		miThreshold = miCPU.calibrateMIThreshold(rankData,numberOfGenes,miPvalue,seed);
+		MI miCPU = new MI(rankData, regulators);
+		miThreshold = miCPU.calibrateMIThreshold(rankData,miPvalue,seed);
 		DataParser.writeValue(miThreshold, miThresholdFile);
 	}
 
 	// ARACNe mode
 	private static void runAracne(
-			File expressionFile,
-			File transcriptionFactorsFile,
-			File kinasesFile,
+			ExpressionMatrix em,
+			String[] regulators,
+			String[] activators,
 			File outputFolder, 
 			String processId,
 			Double fwer,
@@ -244,12 +235,7 @@ public class Aracne {
 			) throws NumberFormatException, Exception {
 		long initialTime = System.currentTimeMillis();
 
-		// Read expression matrix 
-		ExpressionMatrix em = new ExpressionMatrix(expressionFile);
-
-		// Generate ranked data
 		HashMap<String, DataVector> rankData;
-
 		// Bootstrap matrix
 		if(!nobootstrap){
 			System.out.println("Bootstrapping input matrix with "+em.getGenes().size()+" genes and "+em.getSamples().size()+" samples");
@@ -259,37 +245,14 @@ public class Aracne {
 			rankData = em.rankDV(random);
 		}
 
-		// Check if the sample size is less than the short limit
-		int sampleNumber = rankData.get(rankData.keySet().toArray()[0]).values.length;
-		if(sampleNumber>32767){
-			System.err.println("Warning: sample number is higher than the short data limit");
-			System.exit(1);
-		}
-
-		// TF list
-		HashSet<String> tfSet = DataParser.readGeneSet(transcriptionFactorsFile);
-		String[] tfList = tfSet.toArray(new String[0]);
-		Arrays.sort(tfList);
-
-		if(tfList.length==0){
-			System.err.println("The regulator file is badly formatted or empty");
-			System.exit(1);
-		}
-
-		// kinase HashSet;
-		String[] kinList = null;
-		boolean dDPI = false;
-		if(kinasesFile!=null){
-			HashSet<String> kinSet = DataParser.readGeneSet(kinasesFile);
-			if(kinSet.size()==0){
-				System.err.println("The kinase regulator file is badly formatted or empty");
-				System.exit(1);
-			}
-			kinList = kinSet.toArray(new String[0]);
+		// Apply directional DPI if activators were specified
+		boolean dDPI = true;
+		if(activators!=null){
 			dDPI = true;
 		}
 
 		// Check if the threshold file exists
+		int sampleNumber = em.getSamples().size();
 		File miThresholdFile = new File(outputFolder+"/fwer_"+formatter.format(fwer)+"_samples"+sampleNumber+".txt");
 		double miThreshold;
 		if(!miThresholdFile.exists()){
@@ -302,11 +265,11 @@ public class Aracne {
 
 		// Calculate a single ARACNE (using the APAC4 implementation by Alex)
 		long time1 = System.currentTimeMillis();
-		System.out.println("Calculate network from: "+expressionFile);
+		System.out.println("Calculate network");
 		HashMap<String, HashMap<String, Double>> finalNetwork = new HashMap<String, HashMap<String, Double>>();
 		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 
-		MI miCPU = new MI(rankData,tfList,kinList,miThreshold,threadCount);
+		MI miCPU = new MI(rankData,regulators,activators,miThreshold,threadCount);
 
 		finalNetwork = miCPU.getFinalNetwork();
 		finalNetworkSign = miCPU.getFinalNetworkSign();
@@ -337,15 +300,15 @@ public class Aracne {
 	}
 
 	// Consolidate mode
-	private static void runConsolidate(File outputFolder, boolean nobonferroni, Double consolidatePvalue) throws IOException {
+	private static void runConsolidate(File outputFolder, boolean nobonferroni, Double pvalue) throws IOException {
 		BootstrapConsolidator c = new BootstrapConsolidator(nobonferroni);
 		c.mergeFiles(outputFolder);
-		String outputFile = outputFolder+"/network.txt";
+		String outputFile = outputFolder.getAbsolutePath()+"/network.txt";
 
 		
 		// consolidatePvalue is the P-value for the Poisson distribution. Aka how many times an edge has to appear in the bootstraps to be kept.
 		// Hard-coded to 0.3 in the original ARACNe
-		c.writeSignificant(outputFile, consolidatePvalue);
+		c.writeSignificant(outputFile, pvalue);
 
 		System.out.println("\n        :");
 		System.out.println("       :");
@@ -358,10 +321,10 @@ public class Aracne {
 	private static HashMap<String, HashSet<String>> dpi(
 			HashMap<String,	HashMap<String, Double>> finalNet, 
 			HashMap<String, HashMap<String, Boolean>> finalNetSign, 
-			int _threadNumber,
+			int threadNumber,
 			boolean dDPI){
 		DPI dpi = new DPI();
-		return dpi.dpi(finalNet,finalNetSign,_threadNumber,dDPI);
+		return dpi.dpi(finalNet, finalNetSign, threadNumber, dDPI);
 	}
 	
 	// Write results

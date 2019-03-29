@@ -17,86 +17,96 @@ import common.Methods;
 public class MI {
 	// Variables
 	private String[] genes;
+	private String[] regulators;
+	private String[] activators;
 	private int sampleNumber;
 
+	// Computed MI between regulators and targets
 	private HashMap<String, HashMap<String, Double>> finalNetwork;
+	// Computed sign of correlation between regulators and targets (activation: true, deactivation: false)
 	private HashMap<String, HashMap<String, Boolean>> finalNetworkSign;
 
 	// Constructor
 	public MI(
 			HashMap<String, DataVector> data,
-			String[] tfList,
-			String[] kinList,
+			String[] regulators,
+			String[] activators,
 			Double miThreshold,
 			Integer threadCount
 			) {
+		// Set genes
 		this.genes = data.keySet().toArray(new String[0]);
 		Arrays.sort(genes);
+		// Set sample number
 		this.setSampleNumber(data.get(genes[0]).values.length);
 
-		List<String> templist = Arrays.asList(tfList);
-		HashSet<String> temptf = new HashSet<String>(templist);
-		temptf.retainAll(new HashSet<String>(Arrays.asList(genes)));
-		tfList = temptf.toArray(new String[0]);
-		Arrays.sort(tfList);
+		// Set regulators
+		this.regulators = regulators;
+
+		// Set activators
+		this.activators = activators;
 
 		// Loop to check which edges are kept. It will generate the finalNetwork HashMap
 		finalNetwork = new HashMap<String, HashMap<String, Double>>();
 		finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
-		for(int i=0; i<tfList.length; i++){
+		for(int i=0; i<regulators.length; i++){
 			HashMap<String, Double> tt = new HashMap<String, Double>();
 			HashMap<String, Boolean> ttSign = new HashMap<String, Boolean>();
-			finalNetwork.put(tfList[i], tt);
-			finalNetworkSign.put(tfList[i], ttSign);
+			finalNetwork.put(regulators[i], tt);
+			finalNetworkSign.put(regulators[i], ttSign);
 		}
 
-		// multi threading here, run threadCount many parallel MI calculations
+		// Parallelized MI computation
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-		for(int i=0; i<tfList.length; i++){
-			MIThread mt = new MIThread(tfList, kinList, genes, data, miThreshold, i);
+		for(int i=0; i<regulators.length; i++){
+			MIThread mt = new MIThread(data, genes, regulators, activators, miThreshold, i);
 			executor.execute(mt);
 		}
 
 		executor.shutdown();
 		while (!executor.isTerminated()) {
-			// do not continue before all threads finish
+			// Do not continue before all threads finish
 		}
 
-		System.out.println("TFs processed: "+tfList.length);
-		//System.out.println("Edges passing Mi threshold: "+pass);
-		//System.out.println("Edges discarded: "+notpass);
+		System.out.println("Regulators processed: "+regulators.length);
 	}
 
-	// Constructor
-	public MI(HashMap<String, DataVector> data) {
+	// Constructor for calibrateMIThreshold
+	public MI(HashMap<String, DataVector> data, String[] regulators) {
+		// Set genes
 		this.genes = data.keySet().toArray(new String[0]);
 		Arrays.sort(genes);
+		// Set sample number
 		this.setSampleNumber(data.get(genes[0]).values.length);
+
+		// Set regulators
+		this.regulators = regulators;
 	}
 
 	class MIThread extends Thread {
 		// Variables
-		private String[] tfList;
-		private String[] kinList;
-		private String[] genes;
 		private HashMap<String, DataVector> data;
+		private String[] genes;
+		private String[] regulators;
+		private String[] activators;
 		private double miThreshold;
-		private int tfNumber;
+		private int regulatorNumber;
 
 		// Constructor
-		MIThread(String[] _tfList, String[] _kinList, String[] _genes, HashMap<String, DataVector> _data, double _miThreshold, int _tfNumber) {
-			tfList = _tfList;
-			kinList = _kinList;
-			genes = _genes;
-			data = _data;
-			miThreshold = _miThreshold;
-			tfNumber = _tfNumber;
+		MIThread(
+			HashMap<String, DataVector> data,
+			String[] genes,
+			String[] regulators,
+			String[] activators,
+			double miThreshold,
+			int regulatorNumber)
+		{
 		}
 
 		public void run() {
 			for(int j=0; j<genes.length; j++){
-				if(!genes[j].equals(tfList[tfNumber])){
-					DataVector vectorX = data.get(tfList[tfNumber]);
+				if(!genes[j].equals(regulators[regulatorNumber])){
+					DataVector vectorX = data.get(regulators[regulatorNumber]);
 					DataVector vectorY = data.get(genes[j]);
 
 					double mi = quandrantMI(vectorX,vectorY);		// multithread
@@ -121,17 +131,17 @@ public class MI {
 						if (correlation!=0.0){
 							// Compute sign from correlation
 							boolean sign =( ((int)Math.signum(correlation)) == 1);
-							if(kinList!=null){
-								if(Arrays.asList(kinList).contains( tfList[tfNumber]) & sign){
-										setMI(tfList[tfNumber], genes[j], mi);
-										setSign(tfList[tfNumber], genes[j], sign);
-								}else if((!Arrays.asList(kinList).contains( tfList[tfNumber])) & !sign){
-										setMI(tfList[tfNumber], genes[j], mi);
-										setSign(tfList[tfNumber], genes[j], sign);
+							if(activators!=null){
+								if(Arrays.asList(activators).contains( regulators[regulatorNumber]) & sign){
+										setMI(regulators[regulatorNumber], genes[j], mi);
+										setSign(regulators[regulatorNumber], genes[j], sign);
+								}else if((!Arrays.asList(activators).contains( regulators[regulatorNumber])) & !sign){
+										setMI(regulators[regulatorNumber], genes[j], mi);
+										setSign(regulators[regulatorNumber], genes[j], sign);
 								}
 							}else{
-								setMI(tfList[tfNumber], genes[j], mi);
-								setSign(tfList[tfNumber], genes[j], sign);
+								setMI(regulators[regulatorNumber], genes[j], mi);
+								setSign(regulators[regulatorNumber], genes[j], sign);
 							}
 						}
 					}
@@ -148,56 +158,46 @@ public class MI {
 
 	//// Methods
 	// Elegant method to find the MI threshold while taking NA into consideration (based on permutation)
-	public double calibrateMIThreshold(HashMap<String, DataVector> rankData, int numberOfGenes, double miPvalue, int seed){
-		String[] rankGeneSet = rankData.keySet().toArray(new String[0]);
+	public double calibrateMIThreshold(HashMap<String, DataVector> rankData, double miPvalue, int seed){
+		int numberOfSamples = rankData.get(genes[0]).values.length;
 
-		int numberOfSamples = rankData.get(rankGeneSet[0]).values.length;
-
-		if (numberOfGenes > rankGeneSet.length) {
-			throw new IllegalArgumentException("Error: numberOfGenes is larger than number of genes in expression matrix.");
-		}
-
-		System.out.println("Finding threshold for "+numberOfGenes+" random genes and "+numberOfSamples+" samples.");
+		System.out.println("Finding threshold for "+genes.length+" genes and "+numberOfSamples+" samples.");
 
 		HashMap<String, DataVector> tempData = new HashMap<String, DataVector>();
 		Random r = new Random(seed);
 
-		// Generate subset matrix for random genes
-		int g=0;
-		while(g<numberOfGenes){
-			String randomGene = rankGeneSet[r.nextInt(rankGeneSet.length)];
-			if (!tempData.containsKey(randomGene)) {
-				tempData.put(randomGene, rankData.get(randomGene));
-				g++;
-			}
+		// Copy data matrix
+		for(int i=0; i<genes.length; i++){
+			String gene = genes[i];
+			tempData.put(gene, rankData.get(gene));
 		}
-
-		String[] tempGeneSet = tempData.keySet().toArray(new String[0]);
 
 		ArrayList<Double> mit = new ArrayList<Double>();
 
 		// Permutate the values of the data matrix gene-wise
-		for(int i=0; i<numberOfGenes; i++){
+		for(int i=0; i<genes.length; i++){
 			for(int j=0; j<numberOfSamples*10; j++){
 				int r1 = r.nextInt(numberOfSamples);
 				int r2 = r.nextInt(numberOfSamples);
 
-				short temp = tempData.get(tempGeneSet[i]).values[r1];
-				boolean temp_na =  tempData.get(tempGeneSet[i]).NAs[r1];
+				short temp = tempData.get(genes[i]).values[r1];
+				boolean temp_na =  tempData.get(genes[i]).NAs[r1];
 
 				// Flip data points r1 with r2
-				tempData.get(tempGeneSet[i]).values[r1] = tempData.get(tempGeneSet[i]).values[r2];
-				tempData.get(tempGeneSet[i]).NAs[r1] =  tempData.get(tempGeneSet[i]).NAs[r2];
+				tempData.get(genes[i]).values[r1] = tempData.get(genes[i]).values[r2];
+				tempData.get(genes[i]).NAs[r1] =  tempData.get(genes[i]).NAs[r2];
 
-				tempData.get(tempGeneSet[i]).values[r2] = temp;
-				tempData.get(tempGeneSet[i]).NAs[r2] = temp_na;
+				tempData.get(genes[i]).values[r2] = temp;
+				tempData.get(genes[i]).NAs[r2] = temp_na;
 			}
 		}
 
-		// Estimate MI between all genes in subset
-		for(int i=0; i<numberOfGenes; i++){
-			for(int j=(short)(i+1); j<numberOfGenes; j++){
-				mit.add(quandrantMI(tempData.get(tempGeneSet[i]), tempData.get(tempGeneSet[j])));
+		// Estimate MI between all regulators and targets in subset
+		for(int i=0; i<regulators.length; i++){
+			for(int j=0; j<genes.length; j++){
+				if(!genes[j].equals(regulators[i])){
+					mit.add(quandrantMI(tempData.get(regulators[i]), tempData.get(genes[j])));
+				}
 			}
 		}
 
@@ -253,7 +253,7 @@ public class MI {
 
 	// Obtain quandrants and independently assess MI
 	public static double quandrantMI(DataVector vectorX, DataVector vectorY){
-		// Preranked matrices might for candidate interactors might not overlap perfectly, thus requires reranking
+		// Preranked matrices for candidate interactors might not overlap perfectly, thus requires reranking
 		ArrayList<short[]> splitQuad = vectorX.getQuadrants(vectorY);
 		short[] valuesX = splitQuad.get(0);
 		short[] valuesY = splitQuad.get(1);
@@ -267,7 +267,7 @@ public class MI {
 
 		double mi = 0;
 
- 		// Perform first split by using the counts and the recursive mi call for sample pairs that have both values 
+ 		// Perform first split by using the counts and the recursive computeMI call for sample pairs that have both values 
 		if(valuesX.length < 8){
 			mi = getInformation(valuesX.length, (valuesX.length+na1), (valuesX.length+na2));
 		}
