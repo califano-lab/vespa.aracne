@@ -2,6 +2,12 @@ package common;
 
 import java.util.ArrayList;
 
+/**
+ * DataVector is a generic structure to store ranked vectors and NA values
+ *
+ * @param  values A ranked vector, where 0 == NA and all other ranks are integers.
+ * @return DataVector
+ */
 public class DataVector {
 	// Variable Declaration
 	public boolean [] NAs;
@@ -21,15 +27,16 @@ public class DataVector {
 		this.values=values;
 	}
 	
-	// Methods
-
-	/*
-	 * This Method provides two vectors (for not NAs samples) and three counts:
-	 * Nr. of samples with NAs in both vectors
-	 * Nr. of samples with NAs in vector 1
-	 * Nr. of samples with NAs in vector 2
-	 * 
-	*/
+	/**
+	 * Returns quadrants for MI estimation of object against DataVector x
+	 *
+	 * @param  x DataVector
+	 * @return Arraylist with the following vectors:
+	 * 0-1: Intersecting reranked ranks
+	 * 2: Nr. of samples with NAs in both vectors
+	 * 3: Nr. of samples with NAs in vector of object
+	 * 4: Nr. of samples with NAs in vector x
+	 */
 	public ArrayList<short[]> getQuadrants(DataVector x){
 		ArrayList<short[]> output = new ArrayList<short[]>();
 

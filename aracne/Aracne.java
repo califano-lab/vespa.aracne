@@ -21,9 +21,9 @@ import java.util.Locale;
 import java.util.Random;
 
 import aracne.BootstrapConsolidator;
+
 import common.DataParser;
 import common.ExpressionMatrix;
-
 import common.DataVector;
 
 public class Aracne {
@@ -44,7 +44,7 @@ public class Aracne {
 
 		// Flag arguments
 		options.addOption("c", "consolidate", false, "Run ARACNe in consolidation mode");
-		options.addOption("t", "threshold", false, "Run ARACNe in MI threshold calculation mode");
+		options.addOption("t", "threshold", false, "Run ARACNe in MI threshold estimation mode");
 		options.addOption("nd", "nodpi", false, "Run ARACNe without DPI");
 		options.addOption("nb", "nobootstrap", false, "Run ARACNe without bootstrapping");
 		options.addOption("nm", "nobonferroni", false, "Run ARACNe without Bonferroni correction");
@@ -54,10 +54,10 @@ public class Aracne {
 		options.addOption("o", "output", true, "Output directory");
 		options.addOption("r", "regulators", true, "Regulator identifier file (e.g. transcription factors or kinases & phosphatases)");
 		options.addOption("a", "activators", true, "Activator identifier file (e.g. kinases)");
-		options.addOption("f", "fwer", true, "Threshold mode: family-wise error-rate [default: 0.05]");
+		options.addOption("f", "fwer", true, "Threshold estimation mode: family-wise error-rate [default: 0.05]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
-		options.addOption("p", "pvalue", true, "Bootstrapping: p-value threshold for the Poisson test of edge significance [default: 0.05]");
+		options.addOption("p", "pvalue", true, "P-value threshold for the Poisson test of edge significance [default: 0.05]");
 
 		// Default arguments
 		boolean isConsolidate = false;
@@ -71,7 +71,6 @@ public class Aracne {
 		String regulatorsPath = null;
 		String activatorsPath = null;
 		Double fwer = 0.05;
-		Integer numberOfGenes = 3000;
 		Integer seed = null;
 		Integer threadCount = 1;
 		Double pvalue = 0.05; 
@@ -136,6 +135,7 @@ public class Aracne {
 
 		File outputFolder = new File(outputPath);
 		
+		// Set seed if specified
 		if(seed!=null){
 			random = new Random(seed);
 		} else{
@@ -166,16 +166,14 @@ public class Aracne {
 			activators = DataParser.readGeneSet(activatorsFile, em.getGenes());
 		}
 
-		// Here the program forks
-		// You can calculate the MI threshold
-		// You can run a single bootstrap (or non bootstrap)
-		// You can consolidate bootstraps
-
+		// Main ARACNe routines
+		// ARACNe threshold estimation mode
 		if(isThreshold){
 			outputFolder.mkdir();
 
 			runThreshold(em,regulators,outputFolder,fwer,seed);
 		}
+		// ARACNe bootstrapping / standard mode
 		else if(!isConsolidate){
 			String processId = new BigInteger(130, random).toString(32);
 
@@ -190,38 +188,39 @@ public class Aracne {
 					noDPI,
 					nobootstrap
 					);
+		// ARACNe consolidation mode
 		} else {
 			runConsolidate(outputFolder,nobonferroni,pvalue);
 		}
 	}
 
-	// MI Threshold mode
+	// ARACNe MI Threshold mode
 	private static void runThreshold(ExpressionMatrix em, String[] regulators, File outputFolder, double fwer, int seed) throws NumberFormatException, Exception{
 		// Generate ranked data
 		HashMap<String, DataVector> rankData = em.rankDV(random);
 
+		// Get number of samples and genes
 		int sampleNumber = em.getSamples().size();
 		int geneNumber = em.getGenes().size();
 
-		//// Calculate threshold for the required p-value
-		// Don't if a threshold file already exists
+		// Initialize MI threshold file
 		File miThresholdFile = new File(outputFolder+"/fwer_"+formatter.format(fwer)+"_samples"+sampleNumber+".txt");
 		double miThreshold;
 
 		if(miThresholdFile.exists()){
-			System.out.println("MI threshold file was already there, but I am recalculating it.");
+			System.out.println("Warning: Overwriting existing MI threshold file.");
 		}
 
-		// Compute miPvalue
+		// Compute miPvalue for thresholding
 		double miPvalue = fwer / (regulators.length * geneNumber-1);
-		System.out.println("Estimating MI threshold p-value for "+regulators.length+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
+		System.out.println("Estimating p-value threshold for "+regulators.length+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
 
-		MI miCPU = new MI(rankData, regulators);
-		miThreshold = miCPU.calibrateMIThreshold(rankData,miPvalue,seed);
-		DataParser.writeValue(miThreshold, miThresholdFile);
+		// Compute miThreshold and write to file
+		MI miCPU = new MI(rankData, regulators, miPvalue, seed);
+		DataParser.writeValue(miCPU.getThreshold(), miThresholdFile);
 	}
 
-	// ARACNe mode
+	// ARACNe bootstrapping / main mode
 	private static void runAracne(
 			ExpressionMatrix em,
 			String[] regulators,
@@ -238,7 +237,7 @@ public class Aracne {
 		HashMap<String, DataVector> rankData;
 		// Bootstrap matrix
 		if(!nobootstrap){
-			System.out.println("Bootstrapping input matrix with "+em.getGenes().size()+" genes and "+em.getSamples().size()+" samples");
+			System.out.println("Bootstrapping input matrix with "+em.getGenes().size()+" genes and "+em.getSamples().size()+" samples.");
 			ExpressionMatrix bootstrapped = em.bootstrap(random);
 			rankData = bootstrapped.rankDV(random);
 		} else {
@@ -246,7 +245,7 @@ public class Aracne {
 		}
 
 		// Apply directional DPI if activators were specified
-		boolean dDPI = true;
+		boolean dDPI = false;
 		if(activators!=null){
 			dDPI = true;
 		}
@@ -256,27 +255,24 @@ public class Aracne {
 		File miThresholdFile = new File(outputFolder+"/fwer_"+formatter.format(fwer)+"_samples"+sampleNumber+".txt");
 		double miThreshold;
 		if(!miThresholdFile.exists()){
-			System.err.println("MI threshold file is not present.");
-			System.err.println("Please run ARACNE in --calculateThreshold mode first");
-			System.exit(1);
+			throw new IOException("MI threshold file is not present. Run ARACNe in threshold mode first.");
 		}
-		System.out.println("MI threshold file is present");
 		miThreshold = DataParser.readValue(miThresholdFile);
 
-		// Calculate a single ARACNE (using the APAC4 implementation by Alex)
+		// Compute a single ARACNE (using the APAC4 implementation by Alex)
 		long time1 = System.currentTimeMillis();
-		System.out.println("Calculate network");
-		HashMap<String, HashMap<String, Double>> finalNetwork = new HashMap<String, HashMap<String, Double>>();
-		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
+		System.out.println("Compute network.");
 
 		MI miCPU = new MI(rankData,regulators,activators,miThreshold,threadCount);
 
-		finalNetwork = miCPU.getFinalNetwork();
-		finalNetworkSign = miCPU.getFinalNetworkSign();
+		// MI between two interactors
+		HashMap<String, HashMap<String, Double>> finalNetwork = miCPU.getFinalNetwork();
+		// Correlation sign (directionality) between two interactors
+		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = miCPU.getFinalNetworkSign();
 
 		System.out.println("Time elapsed for calculating MI: "+(System.currentTimeMillis() - time1)/1000+" sec\n");
 
-		// And then calculate DPI
+		// Compute DPI
 		long time2 = System.currentTimeMillis();
 		HashMap<String, HashSet<String>> removedEdges;
 		if(noDPI){
@@ -286,7 +282,7 @@ public class Aracne {
 			System.out.println("DPI time elapsed: "+(System.currentTimeMillis() - time2)/1000+" sec");
 		}
 
-		// And write out the single bootstrap network
+		// Write bootstrapped network to file
 		File outputFile;
 		if(nobootstrap){
 			outputFile = new File(outputFolder.getAbsolutePath()+"/nobootstrap_network.txt");
@@ -299,14 +295,14 @@ public class Aracne {
 		System.out.println("Total time elapsed: "+(finalTime - initialTime)/1000+" sec");
 	}
 
-	// Consolidate mode
+	// ARACNe consolidation mode
 	private static void runConsolidate(File outputFolder, boolean nobonferroni, Double pvalue) throws IOException {
 		BootstrapConsolidator c = new BootstrapConsolidator(nobonferroni);
 		c.mergeFiles(outputFolder);
 		String outputFile = outputFolder.getAbsolutePath()+"/network.txt";
 
 		
-		// consolidatePvalue is the P-value for the Poisson distribution. Aka how many times an edge has to appear in the bootstraps to be kept.
+		// P-value for the Poisson distribution, also describes how many times an edge has to appear in the bootstraps to be kept.
 		// Hard-coded to 0.3 in the original ARACNe
 		c.writeSignificant(outputFile, pvalue);
 

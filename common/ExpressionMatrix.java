@@ -1,18 +1,21 @@
 package common;
 
 import java.io.BufferedReader;
-import java.io.DataInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
 
 import common.DataVector;
 
+/**
+ * Generates ExpressionMatrix object from expression matrix file accounting for missing values
+ *
+ * @param  file Input expression matrix file
+ * @return ExpressionMatrix
+ */
 public class ExpressionMatrix {
 	// Variable declaration
 	double[][] data;
@@ -31,11 +34,6 @@ public class ExpressionMatrix {
 
 	// Constructor (parses a file) with missing values
 	public ExpressionMatrix(File file) throws NumberFormatException, IOException, Exception{
-		//System.out.println("Loading file "+file);
-		// Open the file that is the first
-		// command line parameter
-		
-		
 		BufferedReader br0 = new BufferedReader(new FileReader(file));
 		String strLine0;
 		// Count number of lines (features, variables) and columns (arrays, samples)

@@ -5,64 +5,79 @@ import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * Apply data processing inequality to a network
+ *
+ * @param  finalNet HashMap linking regulators with targets and their MI
+ * @param  finalNetSign HashMap linking regulators with targets and their mode of interaction
+ * @param  threadCount Number of threads to use
+ * @param  dDPI Whether directional DPI, accouting for mode of interaction should be used
+ * @return DPI-filtered HashMap linking regulators with targets
+ */
 public class DPI {
 
 	public DPI(){
 		
 	}
 
+	/**
+	 * Apply data processing inequality to a network
+	 *
+	 * @param  finalNet HashMap linking regulators with targets and their MI
+	 * @param  finalNetSign HashMap linking regulators with targets and their mode of interaction
+	 * @param  threadCount Number of threads to use
+	 * @param  dDPI Whether directional DPI, accouting for mode of interaction should be used
+	 * @return DPI-filtered HashMap linking regulators with targets
+	 */
 	public HashMap<String, HashSet<String>> dpi(
 			HashMap<String, HashMap<String, Double>> finalNet,
 			HashMap<String, HashMap<String, Boolean>> finalNetSign,
-			int threadNumber,
+			int threadCount,
 			boolean dDPI
 			){
 			
-			// Keys are hubs
-			String[] transcriptionFactors = finalNet.keySet().toArray(new String[0]);
+			// Keys in finalNet are regulators
+			String[] regulators = finalNet.keySet().toArray(new String[0]);
 
-			// finalNet contains TFs vs. targets MIs
-
-			// transcriptionFactorsMI: first level keys are TFs, second level keys are TFs, the doubles are MI values
-			HashMap<String, HashMap<String, Double>> tftfNetwork = new HashMap<String, HashMap<String, Double>>();
-			HashMap<String, HashMap<String, Boolean>> tftfNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
+			// First level keys are regulators, second level keys are regulators, doubles are MI values
+			HashMap<String, HashMap<String, Double>> regregNetwork = new HashMap<String, HashMap<String, Double>>();
+			HashMap<String, HashMap<String, Boolean>> regregNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 			HashMap<String, HashSet<String>> removedEdges = new HashMap<String,HashSet<String>>();
 
-			for(String tf : transcriptionFactors){
+			for(String regulator : regulators){
 				HashSet<String> temp = new HashSet<String>();
-				removedEdges.put(tf, temp);
+				removedEdges.put(regulator, temp);
 			}
 			
-			// This loop populates the TF-TF Mi Hashmap (tftfNetwork)
-			for (int i = 0; i < transcriptionFactors.length; i++) {
-				for (int j = 0; j < transcriptionFactors.length; j++) {
-					if (finalNet.get(transcriptionFactors[i]).containsKey(transcriptionFactors[j])) {
+			// This loop populates the regulator-regulator MI HashMap (regregNetwork)
+			for (int i = 0; i < regulators.length; i++) {
+				for (int j = 0; j < regulators.length; j++) {
+					if (finalNet.get(regulators[i]).containsKey(regulators[j])) {
 						
-						if (tftfNetwork.containsKey(transcriptionFactors[i])) {
-							tftfNetwork.get(transcriptionFactors[i]).put(transcriptionFactors[j], finalNet.get(transcriptionFactors[i]).get(transcriptionFactors[j]));
-							tftfNetworkSign.get(transcriptionFactors[i]).put(transcriptionFactors[j], finalNetSign.get(transcriptionFactors[i]).get(transcriptionFactors[j]));
+						if (regregNetwork.containsKey(regulators[i])) {
+							regregNetwork.get(regulators[i]).put(regulators[j], finalNet.get(regulators[i]).get(regulators[j]));
+							regregNetworkSign.get(regulators[i]).put(regulators[j], finalNetSign.get(regulators[i]).get(regulators[j]));
 
 						} else {
 							HashMap<String, Double> dtemp = new HashMap<String, Double>();
-							dtemp.put(transcriptionFactors[j], finalNet.get(transcriptionFactors[i]).get(transcriptionFactors[j]));
-							tftfNetwork.put(transcriptionFactors[i], dtemp);
+							dtemp.put(regulators[j], finalNet.get(regulators[i]).get(regulators[j]));
+							regregNetwork.put(regulators[i], dtemp);
 							HashMap<String, Boolean> dtempSign = new HashMap<String, Boolean>();
-							dtempSign.put(transcriptionFactors[j], finalNetSign.get(transcriptionFactors[i]).get(transcriptionFactors[j]));
-							tftfNetworkSign.put(transcriptionFactors[i], dtempSign);
+							dtempSign.put(regulators[j], finalNetSign.get(regulators[i]).get(regulators[j]));
+							regregNetworkSign.put(regulators[i], dtempSign);
 						}
 					}
 				}
 			}
 
-			// This block checks common targets between TFs and operates the DPI check on all TF-target-TF clique triplets
+			// Check common targets between regulators and apply (d)DPI on all regulator-target-regulator clique triplets
 			try{
-				ExecutorService executor = Executors.newFixedThreadPool(threadNumber);
+				ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 				
-				for (int i = 0; i < transcriptionFactors.length; i++) {
-					// targetsOfI is all genes having a significant edge with the TF i
-					// If the first TF is in our tftfMI...
-					if (tftfNetwork.containsKey(transcriptionFactors[i])) {
-						DPIThread mt = new DPIThread(i, dDPI, transcriptionFactors, finalNet, finalNetSign, tftfNetwork, tftfNetworkSign, removedEdges);
+				for (int i = 0; i < regulators.length; i++) {
+					// Apply DPI if the first regulator is in our regregMI
+					if (regregNetwork.containsKey(regulators[i])) {
+						DPIThread mt = new DPIThread(i, dDPI, regulators, finalNet, finalNetSign, regregNetwork, regregNetworkSign, removedEdges);
 						executor.execute(mt);
 					}
 				}
@@ -81,62 +96,71 @@ public class DPI {
 	}
 
 	/**
-	 * The Class DPIThread.
+	 * Single thread of DPI computation step
+	 *
+	 * @param  _i Iteration index
+	 * @param  _dDPI Whether directional DPI, accouting for mode of interaction should be used
+	 * @param  _regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
+	 * @param  _finalNet HashMap linking regulators with targets and their MI
+	 * @param  _finalNetSign HashMap linking regulators with targets and their mode of interaction
+	 * @param  _regregNetwork HashMap linking regulators with regulators and their mode of interaction
+	 * @param  _regregNetworkSign HashMap linking regulators with regulators and their mode of interaction
+	 * @param  _removedEdges Edges to remove
 	 */
 	public class DPIThread extends Thread{
 		
 		private int i = 0;
 		private boolean dDPI = false;
-		private String[] transcriptionFactors;
+		private String[] regulators;
 		private HashMap<String, HashMap<String, Double>> finalNet;
 		private HashMap<String, HashMap<String, Boolean>> finalNetSign;
 
-		HashMap<String, HashMap<String, Double>> tftfNetwork;
-		HashMap<String, HashMap<String, Boolean>> tftfNetworkSign;
+		HashMap<String, HashMap<String, Double>> regregNetwork;
+		HashMap<String, HashMap<String, Boolean>> regregNetworkSign;
 		HashMap<String, HashSet<String>> removedEdges;
 		
-		public DPIThread(int _i, boolean _dDPI, String[] _tfs, 
+		public DPIThread(int _i, boolean _dDPI, String[] _regulators, 
 				HashMap<String, HashMap<String, Double>> _finalNet, 
 				HashMap<String, HashMap<String, Boolean>> _finalNetSign, 
-				HashMap<String, HashMap<String, Double>> _tftfNetwork, 
-				HashMap<String, HashMap<String, Boolean>> _tftfNetworkSign, 
+				HashMap<String, HashMap<String, Double>> _regregNetwork, 
+				HashMap<String, HashMap<String, Boolean>> _regregNetworkSign, 
 				HashMap<String, HashSet<String>> _removedEdges){
 			i = _i;
 			dDPI = _dDPI;
-			transcriptionFactors = _tfs;
+			regulators = _regulators;
 			finalNet = _finalNet;
 			finalNetSign = _finalNetSign;
-			tftfNetwork = _tftfNetwork;
-			tftfNetworkSign = _tftfNetworkSign;
+			regregNetwork = _regregNetwork;
+			regregNetworkSign = _regregNetworkSign;
 			removedEdges = _removedEdges;
 		}
 		
 		public void run(){	
-			HashSet<String> targetsOfI = new HashSet<String>(finalNet.get(transcriptionFactors[i]).keySet());
-			HashMap<String, Double> fin1 = finalNet.get(transcriptionFactors[i]);
-			HashMap<String, Double> tft1 = tftfNetwork.get(transcriptionFactors[i]);
-			HashMap<String, Boolean> fin1Sign = finalNetSign.get(transcriptionFactors[i]);
-			HashMap<String, Boolean> tft1Sign = tftfNetworkSign.get(transcriptionFactors[i]);
-			HashSet<String> rem1 = removedEdges.get(transcriptionFactors[i]);
+			HashSet<String> targetsOfI = new HashSet<String>(finalNet.get(regulators[i]).keySet());
+			HashMap<String, Double> fin1 = finalNet.get(regulators[i]);
+			HashMap<String, Double> tft1 = regregNetwork.get(regulators[i]);
+			HashMap<String, Boolean> fin1Sign = finalNetSign.get(regulators[i]);
+			HashMap<String, Boolean> tft1Sign = regregNetworkSign.get(regulators[i]);
+			HashSet<String> rem1 = removedEdges.get(regulators[i]);
 			
-			for (int j = i + 1; j < transcriptionFactors.length; j++) {
-				// And if the second TF has an edge with the first TF...
-				if (tft1.containsKey(transcriptionFactors[j])) {
+			for (int j = i + 1; j < regulators.length; j++) {
+				// And if the second regulator has an edge with the first regulator...
+				if (tft1.containsKey(regulators[j])) {
 					
-					HashMap<String, Double> fin2 = finalNet.get(transcriptionFactors[j]);
-					HashMap<String, Boolean> fin2Sign = finalNetSign.get(transcriptionFactors[j]);
+					HashMap<String, Double> fin2 = finalNet.get(regulators[j]);
+					HashMap<String, Boolean> fin2Sign = finalNetSign.get(regulators[j]);
 
-					HashSet<String> rem2 = removedEdges.get(transcriptionFactors[j]);
+					HashSet<String> rem2 = removedEdges.get(regulators[j]);
 					
-					// targetsOfJ is all genes having a significant edge with the TF j
+					// targetsOfJ is all genes having a significant edge with the regulator j
 					HashSet<String> targetsOfJ = new HashSet<String>(fin2.keySet());
 					
-					// Intersection: targetsOfJ now contains only targets in common between the two TFs
+					// Intersection: targetsOfJ now contains only targets in common between the two regulators
 					targetsOfJ.retainAll(targetsOfI);		// this eats most of the time needed in the DPI calculation
 					
-					// Obtain the TF-TF MI
-					double tftfMI = tft1.get(transcriptionFactors[j]);
-					boolean tftfMISign = tft1Sign.get(transcriptionFactors[j]);
+					// Obtain the regulator-regulator MI
+					double regregMI = tft1.get(regulators[j]);
+					boolean regregMISign = tft1Sign.get(regulators[j]);
 					
 					// Loop over the common targets
 					for (String target : targetsOfJ){
@@ -146,27 +170,27 @@ public class DPI {
 						boolean s1 = fin1Sign.get(target);
 						boolean s2 = fin2Sign.get(target);
 
-						// apply directional DPI for regulators with known sign of action
+						// apply directional DPI for regulators with known mode of interaction
 						if (dDPI)
 						{
 							// regulator is positive correlation
-							if (tftfMISign & (s1 == s2)){
-								if (v1 < tftfMI && v1 < v2) {
+							if (regregMISign & (s1 == s2)){
+								if (v1 < regregMI && v1 < v2) {
 									synchronized(rem1){
 										rem1.add(target);
 									}
-								} else if (v2 < tftfMI && v2 < v1) {
+								} else if (v2 < regregMI && v2 < v1) {
 									synchronized(rem2){
 										rem2.add(target);
 									}
 								}
-							}else if( (!tftfMISign) & (s1 != s2)){
 							// regulator is negative correlation
-								if (v1 < tftfMI && v1 < v2) {
+							}else if( (!regregMISign) & (s1 != s2)){
+								if (v1 < regregMI && v1 < v2) {
 									synchronized(rem1){
 										rem1.add(target);
 									}
-								} else if (v2 < tftfMI && v2 < v1) {
+								} else if (v2 < regregMI && v2 < v1) {
 									synchronized(rem2){
 										rem2.add(target);
 									}
@@ -180,11 +204,11 @@ public class DPI {
 								}
 							}
 						} else {
-							if (v1 < tftfMI && v1 < v2) {
+							if (v1 < regregMI && v1 < v2) {
 								synchronized(rem1){
 									rem1.add(target);
 								}
-							} else if (v2 < tftfMI && v2 < v1) {
+							} else if (v2 < regregMI && v2 < v1) {
 								synchronized(rem2){
 									rem2.add(target);
 								}

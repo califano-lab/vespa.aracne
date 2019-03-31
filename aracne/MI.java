@@ -3,8 +3,6 @@ package aracne;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,31 +12,49 @@ import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
 import common.DataVector;
 import common.Methods;
 
+/**
+ * Computes mutual information between regulators and targets by hybrid adaptive partitioning.
+ * Requires ranked data and an array of regulators (optional: array of activators),
+ * MI threshold and number of threads to use.
+ *
+ * @param  rankData HashMap linking gene identifiers with ranked DataVector
+ * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
+ * @param  activators (Optional) array of activators (e.g. kinases)
+ * @param  miThreshold MI threshold to use to restrict networks
+ * @param  threadCount Number of threads to use
+ */
 public class MI {
 	// Variables
 	private String[] genes;
 	private String[] regulators;
 	private String[] activators;
-	private int sampleNumber;
 
+	// Computed MI threshold
+	private double miThreshold;
 	// Computed MI between regulators and targets
 	private HashMap<String, HashMap<String, Double>> finalNetwork;
 	// Computed sign of correlation between regulators and targets (activation: true, deactivation: false)
 	private HashMap<String, HashMap<String, Boolean>> finalNetworkSign;
 
-	// Constructor
+	/**
+	 * Constructor for standard ARACNe mode (multi-threaded)
+	 *
+	 * @param  rankData HashMap linking gene identifiers with ranked DataVector
+	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
+	 * @param  activators (Optional) array of activators (e.g. kinases)
+	 * @param  miThreshold MI threshold to use to restrict networks
+	 * @param  threadCount Number of threads to use
+	 */
 	public MI(
-			HashMap<String, DataVector> data,
+			HashMap<String, DataVector> rankData,
 			String[] regulators,
 			String[] activators,
 			Double miThreshold,
 			Integer threadCount
 			) {
 		// Set genes
-		this.genes = data.keySet().toArray(new String[0]);
+		this.genes = rankData.keySet().toArray(new String[0]);
 		Arrays.sort(genes);
-		// Set sample number
-		this.setSampleNumber(data.get(genes[0]).values.length);
 
 		// Set regulators
 		this.regulators = regulators;
@@ -46,7 +62,7 @@ public class MI {
 		// Set activators
 		this.activators = activators;
 
-		// Loop to check which edges are kept. It will generate the finalNetwork HashMap
+		// Loop to check which edges are kept. It will generate the finalNetwork and finalNetworkSign HashMap
 		finalNetwork = new HashMap<String, HashMap<String, Double>>();
 		finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 		for(int i=0; i<regulators.length; i++){
@@ -59,7 +75,7 @@ public class MI {
 		// Parallelized MI computation
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<regulators.length; i++){
-			MIThread mt = new MIThread(data, genes, regulators, activators, miThreshold, i);
+			MIThread mt = new MIThread(rankData, genes, regulators, activators, miThreshold, i);
 			executor.execute(mt);
 		}
 
@@ -71,49 +87,50 @@ public class MI {
 		System.out.println("Regulators processed: "+regulators.length);
 	}
 
-	// Constructor for calibrateMIThreshold
-	public MI(HashMap<String, DataVector> data, String[] regulators) {
-		// Set genes
-		this.genes = data.keySet().toArray(new String[0]);
-		Arrays.sort(genes);
-		// Set sample number
-		this.setSampleNumber(data.get(genes[0]).values.length);
-
-		// Set regulators
-		this.regulators = regulators;
-	}
-
+	/**
+	 * Single thread of MI computation step
+	 *
+	 * @param  rankData HashMap linking gene identifiers with ranked DataVector
+	 * @param  genes Array of genes covered by rankData
+	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
+	 * @param  activators (Optional) array of activators (e.g. kinases)
+	 * @param  miThreshold MI threshold to use to restrict networks
+	 * @param  regulatorIndex Index of processed regulator
+	 */
 	class MIThread extends Thread {
 		// Variables
-		private HashMap<String, DataVector> data;
+		private HashMap<String, DataVector> rankData;
 		private String[] genes;
 		private String[] regulators;
 		private String[] activators;
 		private double miThreshold;
-		private int regulatorNumber;
+		private int regulatorIndex;
 
 		// Constructor
 		MIThread(
-			HashMap<String, DataVector> data,
+			HashMap<String, DataVector> rankData,
 			String[] genes,
 			String[] regulators,
 			String[] activators,
 			double miThreshold,
-			int regulatorNumber)
+			int regulatorIndex)
 		{
 		}
 
 		public void run() {
 			for(int j=0; j<genes.length; j++){
-				if(!genes[j].equals(regulators[regulatorNumber])){
-					DataVector vectorX = data.get(regulators[regulatorNumber]);
-					DataVector vectorY = data.get(genes[j]);
+				if(!genes[j].equals(regulators[regulatorIndex])){
+					// Regulator DataVector
+					DataVector vectorX = rankData.get(regulators[regulatorIndex]);
+					// Target DataVector
+					DataVector vectorY = rankData.get(genes[j]);
 
-					double mi = quadrantMI(vectorX,vectorY);		// multithread
+					// Compute MI by hybrid adaptive partitioning
+					double mi = hapMI(vectorX,vectorY);
 
-					// adaptive.miThresh supplants micut
+					// Only report results if MI is higher than MI threshold
 					if(mi >= miThreshold){
-						// calculate correlation and sign
+						// Compute correlation and sign of interactor (activation or deactivation)
 						ArrayList<short[]> splitQuad = vectorX.getQuadrants(vectorY);
 						short[] valuesX = splitQuad.get(0);
 						short[] valuesY = splitQuad.get(1);
@@ -122,8 +139,8 @@ public class MI {
 						double[] vY = new double[valuesY.length];
 						vY = castShort2Double(valuesY);
 						
-						double correlation = 0.0;
 						// We need at least two data points to assess correlation. If not, we drop the interaction.
+						double correlation = 0.0;
 						if (vX.length > 1) {
 							correlation = new SpearmansCorrelation().correlation(vX,vY);
 						}
@@ -131,17 +148,19 @@ public class MI {
 						if (correlation!=0.0){
 							// Compute sign from correlation
 							boolean sign =( ((int)Math.signum(correlation)) == 1);
+							// If activators are specified, ensure that computed mode is correct
 							if(activators!=null){
-								if(Arrays.asList(activators).contains( regulators[regulatorNumber]) & sign){
-										setMI(regulators[regulatorNumber], genes[j], mi);
-										setSign(regulators[regulatorNumber], genes[j], sign);
-								}else if((!Arrays.asList(activators).contains( regulators[regulatorNumber])) & !sign){
-										setMI(regulators[regulatorNumber], genes[j], mi);
-										setSign(regulators[regulatorNumber], genes[j], sign);
+								if(Arrays.asList(activators).contains( regulators[regulatorIndex]) & sign){
+										setMI(regulators[regulatorIndex], genes[j], mi);
+										setSign(regulators[regulatorIndex], genes[j], sign);
+								}else if((!Arrays.asList(activators).contains( regulators[regulatorIndex])) & !sign){
+										setMI(regulators[regulatorIndex], genes[j], mi);
+										setSign(regulators[regulatorIndex], genes[j], sign);
 								}
+							// If activators are not specified, just report all results
 							}else{
-								setMI(regulators[regulatorNumber], genes[j], mi);
-								setSign(regulators[regulatorNumber], genes[j], sign);
+								setMI(regulators[regulatorIndex], genes[j], mi);
+								setSign(regulators[regulatorIndex], genes[j], sign);
 							}
 						}
 					}
@@ -156,8 +175,39 @@ public class MI {
 		}
 	}
 
-	//// Methods
-	// Elegant method to find the MI threshold while taking NA into consideration (based on permutation)
+	/**
+	 * Constructor for ARACNe MI threshold mode
+	 *
+	 * @param  rankData HashMap linking gene identifiers with ranked DataVector
+	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
+	 * @param  miPvalue miPvalue for thresholding
+	 * @param  seed Seed to use for reproducible results
+	 */
+	public MI(
+			HashMap<String, DataVector> rankData, 
+			String[] regulators,
+			double miPvalue,
+			int seed
+			) {
+		// Set genes
+		this.genes = rankData.keySet().toArray(new String[0]);
+		Arrays.sort(genes);
+
+		// Set regulators
+		this.regulators = regulators;
+
+		// Compute MI threshold
+		this.miThreshold = calibrateMIThreshold(rankData,miPvalue,seed);
+	}
+
+	/**
+	 * Calibrate MI threshold using permutated matrix considering ranks and NAs.
+	 * Regulator - Target relationships are conserved.
+	 *
+	 * @param  rankData HashMap linking gene identifiers with ranked DataVector
+	 * @param  miPvalue miPvalue for thresholding
+	 * @param  seed Seed to use for reproducible results
+	 */
 	public double calibrateMIThreshold(HashMap<String, DataVector> rankData, double miPvalue, int seed){
 		int numberOfSamples = rankData.get(genes[0]).values.length;
 
@@ -196,7 +246,7 @@ public class MI {
 		for(int i=0; i<regulators.length; i++){
 			for(int j=0; j<genes.length; j++){
 				if(!genes[j].equals(regulators[i])){
-					mit.add(quadrantMI(tempData.get(regulators[i]), tempData.get(genes[j])));
+					mit.add(hapMI(tempData.get(regulators[i]), tempData.get(genes[j])));
 				}
 			}
 		}
@@ -212,7 +262,12 @@ public class MI {
 		return(miThreshold);
 	}
 
-	// Fit a null distribution method
+	/**
+	 * Fit MI null distribution
+	 *
+	 * @param  _x Array of MI values
+	 * @param  _tailLength Length of distribution tail
+	 */
 	private double[] fitNull(double[] _x, int _tailLength){
 		Arrays.sort(_x);
 		double[] y = new double[_x.length];
@@ -251,8 +306,21 @@ public class MI {
 		return re;
 	}
 
-	// Obtain quandrants and independently assess MI
-	public static double quadrantMI(DataVector vectorX, DataVector vectorY){
+	/**
+	 * Estimate mutual information between two vectors using hybrid adaptive partitioning.
+	 *
+	 * Step 1: Split DataVector X and Y into 4 quadrants
+	 * 0-1: Ranks of numerical intersection of X and Y
+	 * 2: X and Y both are NA
+	 * 3. Only X is NA
+	 * 4. Only Y is NA
+	 * Step 2: Compute MI for each quadrant separately
+	 * Step 3: Summarize MI
+	 *
+	 * @param  vectorX DataVector of regulator
+	 * @param  vectorY DataVector of target
+	 */
+	 public static double hapMI(DataVector vectorX, DataVector vectorY){
 		// Preranked matrices for candidate interactors might not overlap perfectly, thus requires reranking
 		ArrayList<short[]> splitQuad = vectorX.getQuadrants(vectorY);
 		short[] valuesX = splitQuad.get(0);
@@ -285,7 +353,13 @@ public class MI {
 		return mi;
 	}
 
-	// Adaptive partitioning MI computation (ToDo: GPU parallelization)
+	/**
+	 * Estimate mutual information between two numerical vectors using adaptive partitioning.
+	 * ToDo: Implement GPU parallelization support
+	 *
+	 * @param  vectorX Array of ranks of regulator
+	 * @param  vectorY Arrau of ranks of target
+	 */
 	public static double computeMI(short[] vectorX, short[] vectorY){
 		boolean firstLoop = true;
 		return computeMI(vectorX,vectorY,(short)0,(short)vectorX.length,(short)0,(short)vectorY.length,firstLoop)
@@ -433,20 +507,16 @@ public class MI {
 		return transformed;
 	}
 
+	public Double getThreshold() {
+		return miThreshold;
+	}
+
 	public HashMap<String, HashMap<String, Double>> getFinalNetwork() {
 		return finalNetwork;
 	}
 
 	public HashMap<String, HashMap<String, Boolean>> getFinalNetworkSign() {
 		return finalNetworkSign;
-	}
-
-	public int getSampleNumber() {
-		return sampleNumber;
-	}
-
-	public void setSampleNumber(int sampleNumber) {
-		this.sampleNumber = sampleNumber;
 	}
 
 	public short median(short[] input){
