@@ -56,12 +56,6 @@ public class MI {
 		this.genes = rankData.keySet().toArray(new String[0]);
 		Arrays.sort(genes);
 
-		// Set regulators
-		this.regulators = regulators;
-
-		// Set activators
-		this.activators = activators;
-
 		// Loop to check which edges are kept. It will generate the finalNetwork and finalNetworkSign HashMap
 		finalNetwork = new HashMap<String, HashMap<String, Double>>();
 		finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
@@ -115,6 +109,12 @@ public class MI {
 			double miThreshold,
 			int regulatorIndex)
 		{
+			this.rankData = rankData;
+			this.genes = genes;
+			this.regulators = regulators;
+			this.activators = activators;
+			this.miThreshold = miThreshold;
+			this.regulatorIndex = regulatorIndex;
 		}
 
 		public void run() {

@@ -77,7 +77,7 @@ public class DPI {
 				for (int i = 0; i < regulators.length; i++) {
 					// Apply DPI if the first regulator is in our regregMI
 					if (regregNetwork.containsKey(regulators[i])) {
-						DPIThread mt = new DPIThread(i, dDPI, regulators, finalNet, finalNetSign, regregNetwork, regregNetworkSign, removedEdges);
+						DPIThread mt = new DPIThread(regulators, finalNet, finalNetSign, regregNetwork, regregNetworkSign, dDPI, i, removedEdges);
 						executor.execute(mt);
 					}
 				}
@@ -98,52 +98,56 @@ public class DPI {
 	/**
 	 * Single thread of DPI computation step
 	 *
-	 * @param  _i Iteration index
-	 * @param  _dDPI Whether directional DPI, accouting for mode of interaction should be used
-	 * @param  _regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
-	 * @param  _finalNet HashMap linking regulators with targets and their MI
-	 * @param  _finalNetSign HashMap linking regulators with targets and their mode of interaction
-	 * @param  _regregNetwork HashMap linking regulators with regulators and their mode of interaction
-	 * @param  _regregNetworkSign HashMap linking regulators with regulators and their mode of interaction
-	 * @param  _removedEdges Edges to remove
+	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
+	 * @param  finalNet HashMap linking regulators with targets and their MI
+	 * @param  finalNetSign HashMap linking regulators with targets and their mode of interaction
+	 * @param  regregNetwork HashMap linking regulators with regulators and their mode of interaction
+	 * @param  regregNetworkSign HashMap linking regulators with regulators and their mode of interaction
+	 * @param  dDPI Whether directional DPI, accouting for mode of interaction should be used
+	 * @param  regulatorIndex Index of processed regulator
+	 * @param  removedEdges Edges to remove
 	 */
 	public class DPIThread extends Thread{
-		
-		private int i = 0;
-		private boolean dDPI = false;
+		// Variables
 		private String[] regulators;
 		private HashMap<String, HashMap<String, Double>> finalNet;
 		private HashMap<String, HashMap<String, Boolean>> finalNetSign;
-
 		HashMap<String, HashMap<String, Double>> regregNetwork;
 		HashMap<String, HashMap<String, Boolean>> regregNetworkSign;
+		private boolean dDPI = false;
+		private int regulatorIndex = 0;
 		HashMap<String, HashSet<String>> removedEdges;
 		
-		public DPIThread(int _i, boolean _dDPI, String[] _regulators, 
-				HashMap<String, HashMap<String, Double>> _finalNet, 
-				HashMap<String, HashMap<String, Boolean>> _finalNetSign, 
-				HashMap<String, HashMap<String, Double>> _regregNetwork, 
-				HashMap<String, HashMap<String, Boolean>> _regregNetworkSign, 
-				HashMap<String, HashSet<String>> _removedEdges){
-			i = _i;
-			dDPI = _dDPI;
-			regulators = _regulators;
-			finalNet = _finalNet;
-			finalNetSign = _finalNetSign;
-			regregNetwork = _regregNetwork;
-			regregNetworkSign = _regregNetworkSign;
-			removedEdges = _removedEdges;
+		// Constructor
+		public DPIThread(
+				String[] regulators,
+				HashMap<String, HashMap<String, Double>> finalNet, 
+				HashMap<String, HashMap<String, Boolean>> finalNetSign, 
+				HashMap<String, HashMap<String, Double>> regregNetwork, 
+				HashMap<String, HashMap<String, Boolean>> regregNetworkSign, 
+				boolean dDPI,
+				int regulatorIndex,
+				HashMap<String, HashSet<String>> removedEdges
+				){
+			this.regulators = regulators;
+			this.finalNet = finalNet;
+			this.finalNetSign = finalNetSign;
+			this.regregNetwork = regregNetwork;
+			this.regregNetworkSign = regregNetworkSign;
+			this.dDPI = dDPI;
+			this.regulatorIndex = regulatorIndex;
+			this.removedEdges = removedEdges;
 		}
 		
 		public void run(){	
-			HashSet<String> targetsOfI = new HashSet<String>(finalNet.get(regulators[i]).keySet());
-			HashMap<String, Double> fin1 = finalNet.get(regulators[i]);
-			HashMap<String, Double> tft1 = regregNetwork.get(regulators[i]);
-			HashMap<String, Boolean> fin1Sign = finalNetSign.get(regulators[i]);
-			HashMap<String, Boolean> tft1Sign = regregNetworkSign.get(regulators[i]);
-			HashSet<String> rem1 = removedEdges.get(regulators[i]);
+			HashSet<String> targetsOfI = new HashSet<String>(finalNet.get(regulators[regulatorIndex]).keySet());
+			HashMap<String, Double> fin1 = finalNet.get(regulators[regulatorIndex]);
+			HashMap<String, Double> tft1 = regregNetwork.get(regulators[regulatorIndex]);
+			HashMap<String, Boolean> fin1Sign = finalNetSign.get(regulators[regulatorIndex]);
+			HashMap<String, Boolean> tft1Sign = regregNetworkSign.get(regulators[regulatorIndex]);
+			HashSet<String> rem1 = removedEdges.get(regulators[regulatorIndex]);
 			
-			for (int j = i + 1; j < regulators.length; j++) {
+			for (int j = regulatorIndex + 1; j < regulators.length; j++) {
 				// And if the second regulator has an edge with the first regulator...
 				if (tft1.containsKey(regulators[j])) {
 					
