@@ -105,9 +105,9 @@ public class ExpressionMatrix {
 		for(String gene : genes){
 			double[] inputVector = data[i];
 			boolean[] naVector = naBoolean[i];
-			// Add white noise
+			// Add white noise to break ties
 			for(int ii = 0; ii<inputVector.length; ii++){
-				 inputVector[ii] = inputVector[ii] + random.nextDouble() / 100000;
+				 inputVector[ii] = inputVector[ii] + random.nextDouble() / 1e5;
 			}
 			
 			short[] values = Methods.rankVector(inputVector,naVector);
@@ -126,9 +126,9 @@ public class ExpressionMatrix {
 		for(String gene : genes){
 			double[] inputVector = data[i];
 			boolean[] naVector = naBoolean[i];
-			// Add white noise
+			// Add white noise to break ties
 			for(int ii = 0; ii<inputVector.length; ii++){
-				 inputVector[ii] = inputVector[ii] + random.nextDouble() / 100000;
+				 inputVector[ii] = inputVector[ii] + random.nextDouble() / 1e5;
 			}
 			
 			short[] values = Methods.rankVector(inputVector,naVector);
@@ -181,8 +181,9 @@ public class ExpressionMatrix {
 		boolean[][] newdataNA = new boolean[genes.size()][samples.size()];
 		for(int i = 0; i<genes.size(); i++){
 			for(int j = 0; j<samples.size(); j++){
-				newdata[i][j] = data[i][bootsamples[j]] + random.nextDouble() / 100000;// WHITE NOISE AGAIN! FOR BREAKING THE TIES IN THE BOOTSTRAP!
-				newdataNA[i][j] = naBoolean[i][bootsamples[j]];// WHITE NOISE AGAIN! FOR BREAKING THE TIES IN THE BOOTSTRAP!
+				// Add white noise to break ties
+				newdata[i][j] = data[i][bootsamples[j]] + random.nextDouble() / 1e5;
+				newdataNA[i][j] = naBoolean[i][bootsamples[j]];
 			}
 		}
 		ExpressionMatrix em = new ExpressionMatrix(newdata, newdataNA, genes, samples);
@@ -190,13 +191,13 @@ public class ExpressionMatrix {
 	}
 
 	public ExpressionMatrix bootstrap(int[] bootsamples){
-		Random noiseGenerator = new Random(); // WHITE NOISE AGAIN! FOR BREAKING THE TIES IN THE BOOTSTRAP!
-		// Generate a bootstrapped data
+		Random noiseGenerator = new Random();
 		double[][] newdata = new double[genes.size()][samples.size()];
 		boolean[][] newdataNA = new boolean[genes.size()][samples.size()];
 		for(int i = 0; i<genes.size(); i++){
 			for(int j = 0; j<samples.size(); j++){
-				newdata[i][j] = data [i][bootsamples[j]] + noiseGenerator.nextDouble() / 100000;
+				// Add white noise to break ties
+				newdata[i][j] = data [i][bootsamples[j]] + noiseGenerator.nextDouble() / 1e5;
 				newdataNA[i][j] = naBoolean[i][bootsamples[j]];
 			}		
 		}
