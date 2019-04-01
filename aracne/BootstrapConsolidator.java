@@ -10,143 +10,128 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 
-import org.apache.commons.math3.distribution.PoissonDistribution;
+import common.DataParser;
 
 public class BootstrapConsolidator {
+	private Double mit = 0.0;
 
-	private double[] poissonLibrary = new double[100];
-	
-	private HashMap<String, Integer> edgesOccurrences = new HashMap<String, Integer>();
-	private HashMap<String, Double> mi = new HashMap<String, Double>();
-	
-	private HashSet<String> tfs = new HashSet<String>();
-	private HashSet<String> targets = new HashSet<String>();
-	
-	private int maxCount = 0;
+	private HashMap<String,	HashMap<String, Double>> net = new HashMap<String,	HashMap<String, Double>>();
+	private HashMap<String, HashMap<String, Boolean>> netSign = new HashMap<String, HashMap<String, Boolean>>();
+	private HashMap<String, HashMap<String, Double>> netSignMI = new HashMap<String, HashMap<String, Double>>();
 
-	private boolean nobonferroni;
-
-	
-	public BootstrapConsolidator(boolean nobonferroni) {
-		this.nobonferroni=nobonferroni;
+	public BootstrapConsolidator() {
 	}
 
-	public void mergeFiles(File folder) throws IOException{
+	public void mergeMIT(File folder) throws IOException{
 		FilenameFilter filter = new FilenameFilter() {
-		    @Override
-		    public boolean accept(File dir, String name) {
-		        return name.matches("bootstrapNetwork_.*");
-		    }
+			@Override
+			public boolean accept(File dir, String name) {
+				return name.matches("mithreshold_.*");
+			}
 		};
 		File[] listOfFiles = folder.listFiles(filter);
 	
-		// Calculate the occurrence of each edge (count object)
-		// And sum the global mi for each edge
-		System.out.println("Integrating "+listOfFiles.length+" bootstraps...");
+		System.out.println("Integrating "+listOfFiles.length+" MI threshold bootstraps.");
 		for (File file : listOfFiles) {
-		    if (file.isFile()) {
-		        System.out.println(file.getName());
-		        try {
-		        	BufferedReader br = new BufferedReader(new FileReader(file));
-		        	String line = "";
-		        	boolean firstline = true;
-		        	while((line = br.readLine()) != null){
-		        		if(firstline){
-		        			firstline=false;
-		        		} else {
-			        		String[] sp = line.split("\t");
-			        		String key = sp[0]+"#"+sp[1]; // edge key
-			        		tfs.add(sp[0]);
-			        		targets.add(sp[1]);
-			        		if(edgesOccurrences.containsKey(key)){
-			        			edgesOccurrences.put(key, edgesOccurrences.get(key)+1);
-			        			mi.put(key, mi.get(key)+Double.parseDouble(sp[2]));
-			        		}
-			        		else{
-			        			edgesOccurrences.put(key, 1);
-			        			mi.put(key, Double.parseDouble(sp[2]));
-			        		}
-		        		}
-		        	}
-		        	br.close();
-		        }
-		        catch(Exception e){
-		        	e.printStackTrace();
-		        }
-		    }
+			if (file.isFile()) {
+				System.out.println(file.getName());
+				try {
+					mit = mit + DataParser.readValue(file);
+				}
+				catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+		}
+		mit = mit/listOfFiles.length;
+		System.out.println("Mean MI threshold: "+mit);
+	}
+
+	public void mergeNetworks(File folder) throws IOException{
+		FilenameFilter filter = new FilenameFilter() {
+			@Override
+			public boolean accept(File dir, String name) {
+				return name.matches("bootstrapNetwork_.*");
+			}
+		};
+		File[] listOfFiles = folder.listFiles(filter);
+	
+		System.out.println("Integrating "+listOfFiles.length+" network bootstraps.");
+		for (File file : listOfFiles) {
+			if (file.isFile()) {
+				System.out.println(file.getName());
+				try {
+					BufferedReader br = new BufferedReader(new FileReader(file));
+					String line = "";
+					boolean firstline = true;
+					while((line = br.readLine()) != null){
+						if(firstline){
+							firstline=false;
+						} else {
+							String[] sp = line.split("\t");
+							if(net.containsKey(sp[0])){
+								HashMap<String, Double> targetNet = net.get(sp[0]);
+								HashMap<String, Boolean> targetNetSign = netSign.get(sp[0]);
+								HashMap<String, Double> targetNetSignMI = netSignMI.get(sp[0]);
+
+								if(targetNet.containsKey(sp[1])){
+									targetNet.put(sp[1], targetNet.get(sp[1]) + Double.parseDouble(sp[2]));
+									// Replace sign if MI of current bootstrap is higher then others.
+									if (Double.parseDouble(sp[2]) > targetNetSignMI.get(sp[1])){
+										targetNetSign.put(sp[1], Boolean.parseBoolean(sp[3]));
+										targetNetSignMI.put(sp[1], Double.parseDouble(sp[2]));
+									}
+								}
+								else{
+									targetNet.put(sp[1], Double.parseDouble(sp[2]));
+									targetNetSign.put(sp[1], Boolean.parseBoolean(sp[3]));
+									targetNetSignMI.put(sp[1], Double.parseDouble(sp[2]));
+								}
+
+								net.put(sp[0], targetNet);
+								netSign.put(sp[0], targetNetSign);
+								netSignMI.put(sp[0], targetNetSignMI);
+							}
+							else{
+								HashMap<String, Double> targetNet = new HashMap<String, Double>();
+								HashMap<String, Boolean> targetNetSign = new HashMap<String, Boolean>();
+								HashMap<String, Double> targetNetSignMI = new HashMap<String, Double>();
+
+								targetNet.put(sp[1], Double.parseDouble(sp[2]));
+								targetNetSign.put(sp[1], Boolean.parseBoolean(sp[3]));
+								targetNetSignMI.put(sp[1], Double.parseDouble(sp[2]));
+
+								net.put(sp[0], targetNet);
+								netSign.put(sp[0], targetNetSign);
+								netSignMI.put(sp[0], targetNetSignMI);
+							}
+						}
+					}
+					br.close();
+				}
+				catch(Exception e){
+					e.printStackTrace();
+				}
+			}
 		}
 		
-		// Initialize the poisson distribution based on the average number of edge appearance
-		long allCount = 0;
-		//FileWriter fw = new FileWriter(new File("file.txt"));
-		for(String key : edgesOccurrences.keySet()){
-			// Calculate the average mi of each edge
-			int edgeOccurrence=edgesOccurrences.get(key);
-			mi.put(key, mi.get(key)/edgeOccurrence);
-			allCount += edgeOccurrence; // Total number of edges in all the bootstrap files
-			if(edgeOccurrence > maxCount){
-				maxCount = edgeOccurrence; // Edge with the most count
+		for(String regulatorKey : net.keySet()){
+			HashMap<String, Double> targetNet = net.get(regulatorKey);
+			for(String targetKey : targetNet.keySet()){
+				targetNet.put(targetKey, targetNet.get(targetKey) / listOfFiles.length);
 			}
-			//fw.write(edgeOccurrence+"\n");
 		}
-		//fw.close();
-		// Lambda
-		//long allObservedEdges = edgesOccurrences.size();
-		//double meanEdgeNumber = allCount/allObservedEdges; // Wrong way: observed edges in the denominator
-		double meanEdgeNumber = (allCount*1.0)/(targets.size()*tfs.size()); // Right way: all possible edges
-		generatePoissonPvalues(meanEdgeNumber);
 	}
-	
-	public void writeSignificant(String outFile, double poissonPvalue){
-		int totalCount = tfs.size()*targets.size();
-		try{
-			BufferedWriter bw = new BufferedWriter(new FileWriter(new File(outFile)));
 
-			// Header
-			bw.write("Regulator\tTarget\tMI\tpvalue\n");
+	public double getMIT() {
+		return mit;
+	}
 
-			String[] keys = edgesOccurrences.keySet().toArray(new String[0]);
-			for(String key : keys){
-				int occurrence = edgesOccurrences.get(key);
-				// Bonferroni correction
-				// In the C++ version, the correction was done using the observed number of edges
-				// Here, the correction is done based on ALL the possible combinations
-				double thisPvalue;
-				if(nobonferroni) {
-					thisPvalue = poissonLibrary[occurrence];
-				} else {
-					thisPvalue = poissonLibrary[occurrence]*totalCount;	
-				}
-				
-				if(thisPvalue>1){
-					thisPvalue=1;
-				}
-				if(thisPvalue < poissonPvalue){
-					String[] sp = key.split("#");
-					bw.write(sp[0]+"\t"+sp[1]+"\t"+mi.get(key)+"\t"+thisPvalue+"\n");
-				}
-			}
-			bw.close();
-		}
-		catch(Exception e){
-			e.printStackTrace();
-		}
+	public HashMap<String, HashMap<String, Double>> getFinalNetwork() {
+		return net;
 	}
-	
-	public void generatePoissonPvalues(double mean){
-		poissonLibrary = new double[maxCount+1];
-		PoissonDistribution pdist = new PoissonDistribution(mean);
-		for(int i=0; i<maxCount+1; i++){
-			poissonLibrary[i] = 1.0-pdist.cumulativeProbability(i);
-		}
+
+	public HashMap<String, HashMap<String, Boolean>> getFinalNetworkSign() {
+		return netSign;
 	}
-	
 }
-
-
-
-
-
-
-
-

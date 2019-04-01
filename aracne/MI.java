@@ -39,14 +39,12 @@ public class MI {
 	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
-	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  threadCount Number of threads to use
 	 */
 	public MI(
 			HashMap<String, short[]> rankData,
 			String[] regulators,
 			String[] activators,
-			Double miThreshold,
 			Integer threadCount
 			) {
 		// Set genes
@@ -66,7 +64,7 @@ public class MI {
 		// Parallelized MI computation
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<regulators.length; i++){
-			MIThread mt = new MIThread(rankData, genes, regulators, activators, miThreshold, i);
+			MIThread mt = new MIThread(rankData, genes, regulators, activators, i);
 			executor.execute(mt);
 		}
 
@@ -85,7 +83,6 @@ public class MI {
 	 * @param  genes Array of genes covered by rankData
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
-	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  regulatorIndex Index of processed regulator
 	 */
 	class MIThread extends Thread {
@@ -94,7 +91,6 @@ public class MI {
 		private String[] genes;
 		private String[] regulators;
 		private String[] activators;
-		private double miThreshold;
 		private int regulatorIndex;
 
 		// Constructor
@@ -103,14 +99,12 @@ public class MI {
 			String[] genes,
 			String[] regulators,
 			String[] activators,
-			double miThreshold,
 			int regulatorIndex)
 		{
 			this.rankData = rankData;
 			this.genes = genes;
 			this.regulators = regulators;
 			this.activators = activators;
-			this.miThreshold = miThreshold;
 			this.regulatorIndex = regulatorIndex;
 		}
 
@@ -125,40 +119,37 @@ public class MI {
 					// Compute MI by hybrid adaptive partitioning
 					double mi = hapMI(vectorX,vectorY);
 
-					// Only report results if MI is higher than MI threshold
-					if(mi >= miThreshold){
-						// Compute correlation and sign of interactor (activation or deactivation)
-						ArrayList<short[]> splitQuad = splitQuadrants(vectorX,vectorY);
-						short[] valuesX = splitQuad.get(0);
-						short[] valuesY = splitQuad.get(1);
-						double[] vX = new double[valuesX.length];		
-						vX = castShort2Double(valuesX);
-						double[] vY = new double[valuesY.length];
-						vY = castShort2Double(valuesY);
-						
-						// We need at least two data points to assess correlation. If not, we drop the interaction.
-						double correlation = Double.NaN;
-						if (vX.length > 1) {
-							correlation = new SpearmansCorrelation().correlation(vX,vY);
-						}
-						
-						if (correlation!=Double.NaN){
-							// Compute sign from correlation
-							boolean sign =( ((int)Math.signum(correlation)) == 1);
-							// If activators are specified, ensure that computed mode is correct
-							if(activators!=null){
-								if(Arrays.asList(activators).contains( regulators[regulatorIndex]) & sign){
-										setMI(regulators[regulatorIndex], genes[j], mi);
-										setSign(regulators[regulatorIndex], genes[j], sign);
-								}else if((!Arrays.asList(activators).contains( regulators[regulatorIndex])) & !sign){
-										setMI(regulators[regulatorIndex], genes[j], mi);
-										setSign(regulators[regulatorIndex], genes[j], sign);
-								}
-							// If activators are not specified, just report all results
-							}else{
-								setMI(regulators[regulatorIndex], genes[j], mi);
-								setSign(regulators[regulatorIndex], genes[j], sign);
+					// Compute correlation and sign of interactor (activation or deactivation)
+					ArrayList<short[]> splitQuad = splitQuadrants(vectorX,vectorY);
+					short[] valuesX = splitQuad.get(0);
+					short[] valuesY = splitQuad.get(1);
+					double[] vX = new double[valuesX.length];		
+					vX = castShort2Double(valuesX);
+					double[] vY = new double[valuesY.length];
+					vY = castShort2Double(valuesY);
+					
+					// We need at least two data points to assess correlation. If not, we drop the interaction.
+					double correlation = Double.NaN;
+					if (vX.length > 1) {
+						correlation = new SpearmansCorrelation().correlation(vX,vY);
+					}
+					
+					if (correlation!=Double.NaN){
+						// Compute sign from correlation
+						boolean sign =( ((int)Math.signum(correlation)) == 1);
+						// If activators are specified, ensure that computed mode is correct
+						if(activators!=null){
+							if(Arrays.asList(activators).contains( regulators[regulatorIndex]) & sign){
+									setMI(regulators[regulatorIndex], genes[j], mi);
+									setSign(regulators[regulatorIndex], genes[j], sign);
+							}else if((!Arrays.asList(activators).contains( regulators[regulatorIndex])) & !sign){
+									setMI(regulators[regulatorIndex], genes[j], mi);
+									setSign(regulators[regulatorIndex], genes[j], sign);
 							}
+						// If activators are not specified, just report all results
+						}else{
+							setMI(regulators[regulatorIndex], genes[j], mi);
+							setSign(regulators[regulatorIndex], genes[j], sign);
 						}
 					}
 				}
@@ -216,7 +207,8 @@ public class MI {
 		// Copy data matrix
 		for(int i=0; i<genes.length; i++){
 			String gene = genes[i];
-			tempData.put(gene, rankData.get(gene));
+			short[] values = (short[])rankData.get(gene).clone();
+			tempData.put(gene, values);
 		}
 
 		ArrayList<Double> mit = new ArrayList<Double>();
