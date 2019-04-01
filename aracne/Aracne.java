@@ -26,7 +26,6 @@ import aracne.BootstrapConsolidator;
 
 import common.DataParser;
 import common.ExpressionMatrix;
-import common.DataVector;
 
 public class Aracne {
 	// Variable definition
@@ -199,7 +198,7 @@ public class Aracne {
 	// ARACNe MI Threshold mode
 	private static void runThreshold(ExpressionMatrix em, String[] regulators, File outputFolder, double fwer, int seed) throws NumberFormatException, Exception{
 		// Generate ranked data
-		HashMap<String, DataVector> rankData = em.rank(random);
+		HashMap<String, short[]> rankData = em.rank(random);
 
 		// Get number of samples and genes
 		int sampleNumber = em.getSamples().size();
@@ -236,7 +235,7 @@ public class Aracne {
 			) throws NumberFormatException, Exception {
 		long initialTime = System.currentTimeMillis();
 
-		HashMap<String, DataVector> rankData;
+		HashMap<String, short[]> rankData;
 		// Bootstrap matrix
 		if(!nobootstrap){
 			System.out.println("Bootstrapping input matrix with "+em.getGenes().size()+" genes and "+em.getSamples().size()+" samples.");

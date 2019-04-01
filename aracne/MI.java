@@ -9,14 +9,12 @@ import java.util.concurrent.Executors;
 
 import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
 
-import common.DataVector;
-
 /**
  * Computes mutual information between regulators and targets by hybrid adaptive partitioning.
  * Requires ranked data and an array of regulators (optional: array of activators),
  * MI threshold and number of threads to use.
  *
- * @param  rankData HashMap linking gene identifiers with ranked DataVector
+ * @param  rankData HashMap linking gene identifiers with ranks
  * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
  * @param  activators (Optional) array of activators (e.g. kinases)
  * @param  miThreshold MI threshold to use to restrict networks
@@ -38,14 +36,14 @@ public class MI {
 	/**
 	 * Constructor for standard ARACNe mode (multi-threaded)
 	 *
-	 * @param  rankData HashMap linking gene identifiers with ranked DataVector
+	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
 	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  threadCount Number of threads to use
 	 */
 	public MI(
-			HashMap<String, DataVector> rankData,
+			HashMap<String, short[]> rankData,
 			String[] regulators,
 			String[] activators,
 			Double miThreshold,
@@ -83,7 +81,7 @@ public class MI {
 	/**
 	 * Single thread of MI computation step
 	 *
-	 * @param  rankData HashMap linking gene identifiers with ranked DataVector
+	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  genes Array of genes covered by rankData
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
@@ -92,7 +90,7 @@ public class MI {
 	 */
 	class MIThread extends Thread {
 		// Variables
-		private HashMap<String, DataVector> rankData;
+		private HashMap<String, short[]> rankData;
 		private String[] genes;
 		private String[] regulators;
 		private String[] activators;
@@ -101,7 +99,7 @@ public class MI {
 
 		// Constructor
 		MIThread(
-			HashMap<String, DataVector> rankData,
+			HashMap<String, short[]> rankData,
 			String[] genes,
 			String[] regulators,
 			String[] activators,
@@ -119,10 +117,10 @@ public class MI {
 		public void run() {
 			for(int j=0; j<genes.length; j++){
 				if(!genes[j].equals(regulators[regulatorIndex])){
-					// Regulator DataVector
-					DataVector vectorX = rankData.get(regulators[regulatorIndex]);
-					// Target DataVector
-					DataVector vectorY = rankData.get(genes[j]);
+					// Regulator ranks
+					short[] vectorX = rankData.get(regulators[regulatorIndex]);
+					// Target ranks
+					short[] vectorY = rankData.get(genes[j]);
 
 					// Compute MI by hybrid adaptive partitioning
 					double mi = hapMI(vectorX,vectorY);
@@ -130,7 +128,7 @@ public class MI {
 					// Only report results if MI is higher than MI threshold
 					if(mi >= miThreshold){
 						// Compute correlation and sign of interactor (activation or deactivation)
-						ArrayList<short[]> splitQuad = vectorX.getQuadrants(vectorY);
+						ArrayList<short[]> splitQuad = splitQuadrants(vectorX,vectorY);
 						short[] valuesX = splitQuad.get(0);
 						short[] valuesY = splitQuad.get(1);
 						double[] vX = new double[valuesX.length];		
@@ -139,12 +137,12 @@ public class MI {
 						vY = castShort2Double(valuesY);
 						
 						// We need at least two data points to assess correlation. If not, we drop the interaction.
-						double correlation = 0.0;
+						double correlation = Double.NaN;
 						if (vX.length > 1) {
 							correlation = new SpearmansCorrelation().correlation(vX,vY);
 						}
 						
-						if (correlation!=0.0){
+						if (correlation!=Double.NaN){
 							// Compute sign from correlation
 							boolean sign =( ((int)Math.signum(correlation)) == 1);
 							// If activators are specified, ensure that computed mode is correct
@@ -177,13 +175,13 @@ public class MI {
 	/**
 	 * Constructor for ARACNe MI threshold mode
 	 *
-	 * @param  rankData HashMap linking gene identifiers with ranked DataVector
+	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  miPvalue miPvalue for thresholding
 	 * @param  seed Seed to use for reproducible results
 	 */
 	public MI(
-			HashMap<String, DataVector> rankData, 
+			HashMap<String, short[]> rankData, 
 			String[] regulators,
 			double miPvalue,
 			int seed
@@ -203,16 +201,16 @@ public class MI {
 	 * Calibrate MI threshold using permutated matrix considering ranks and NAs.
 	 * Regulator - Target relationships are conserved.
 	 *
-	 * @param  rankData HashMap linking gene identifiers with ranked DataVector
+	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  miPvalue miPvalue for thresholding
 	 * @param  seed Seed to use for reproducible results
 	 */
-	public double calibrateMIThreshold(HashMap<String, DataVector> rankData, double miPvalue, int seed){
-		int numberOfSamples = rankData.get(genes[0]).values.length;
+	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int seed){
+		int numberOfSamples = rankData.get(genes[0]).length;
 
 		System.out.println("Finding threshold for "+genes.length+" genes and "+numberOfSamples+" samples.");
 
-		HashMap<String, DataVector> tempData = new HashMap<String, DataVector>();
+		HashMap<String, short[]> tempData = new HashMap<String, short[]>();
 		Random r = new Random(seed);
 
 		// Copy data matrix
@@ -229,15 +227,12 @@ public class MI {
 				int r1 = r.nextInt(numberOfSamples);
 				int r2 = r.nextInt(numberOfSamples);
 
-				short temp = tempData.get(genes[i]).values[r1];
-				boolean temp_na =  tempData.get(genes[i]).NAs[r1];
+				short temp = tempData.get(genes[i])[r1];
 
 				// Flip data points r1 with r2
-				tempData.get(genes[i]).values[r1] = tempData.get(genes[i]).values[r2];
-				tempData.get(genes[i]).NAs[r1] =  tempData.get(genes[i]).NAs[r2];
+				tempData.get(genes[i])[r1] = tempData.get(genes[i])[r2];
 
-				tempData.get(genes[i]).values[r2] = temp;
-				tempData.get(genes[i]).NAs[r2] = temp_na;
+				tempData.get(genes[i])[r2] = temp;
 			}
 		}
 
@@ -306,9 +301,88 @@ public class MI {
 	}
 
 	/**
+	 * Returns quadrants for MI estimation of x against y
+	 *
+	 * @param  x short[] ranks with 0 designated as NaN
+	 * @param  y short[] ranks with 0 designated as NaN
+	 * @return Arraylist with the following vectors:
+	 * 0-1: Intersecting reranked ranks
+	 * 2: Nr. of samples with NAs in both vectors
+	 * 3: Nr. of samples with NAs in vector of object
+	 * 4: Nr. of samples with NAs in vector x
+	 */
+	public static ArrayList<short[]> splitQuadrants(short[] x, short[] y){
+		ArrayList<short[]> output = new ArrayList<short[]>();
+
+		// Quadrant counts
+		short[] bothNA = new short[1];
+		short[] xNA = new short[1];
+		short[] yNA = new short[1];
+		bothNA[0] = xNA[0] = yNA[0] = 0;
+		
+		// First loop does the counting
+		int lengthOfNotNAsInBoth = 0;
+		for(int i=0; i<x.length; i++){
+			if(x[i]!=0){
+				if (y[i]!=0){
+					lengthOfNotNAsInBoth++;
+				} else {
+					yNA[0]++;
+				}
+			}  else {
+				if (y[i]!=0){
+					xNA[0]++;
+				} else {
+					bothNA[0]++;
+				}
+			}
+		}
+	
+		// Second loop generates the not NAs vectors
+		short [] xNotNA = new short[lengthOfNotNAsInBoth];
+		short [] yNotNA = new short[lengthOfNotNAsInBoth];
+		int j = 0;
+		for(int i=0; i<x.length; i++){
+			if(x[i]!=0 & y[i]!=0){
+				xNotNA[j] = x[i];
+				yNotNA[j] = y[i];
+				j++;		
+			}
+		}
+
+		// Rerank if necessary
+		if (lengthOfNotNAsInBoth != x.length){
+			xNotNA = reRankVector(xNotNA);
+			yNotNA = reRankVector(yNotNA);
+		}
+
+		output.add(xNotNA);
+		output.add(yNotNA);
+		output.add(bothNA);
+		output.add(xNA);
+		output.add(yNA);
+
+		return output;
+	}
+
+	public static short[] reRankVector(short[] inputVector){
+		short[] rankVector = new short[inputVector.length];
+		for(int i=0; i<inputVector.length; i++){
+			int counter = 1;
+			for(int j=0; j<inputVector.length; j++){
+				if(inputVector[i] > inputVector[j]){
+					counter++;
+				}
+			}
+			rankVector[i] = (short)counter;
+		}
+		return rankVector;
+	}	
+
+	/**
 	 * Estimate mutual information between two vectors using hybrid adaptive partitioning.
 	 *
-	 * Step 1: Split DataVector X and Y into 4 quadrants
+	 * Step 1: Split ranks X and Y into 4 quadrants
 	 * 0-1: Ranks of numerical intersection of X and Y
 	 * 2: X and Y both are NA
 	 * 3. Only X is NA
@@ -316,12 +390,12 @@ public class MI {
 	 * Step 2: Compute MI for each quadrant separately
 	 * Step 3: Summarize MI
 	 *
-	 * @param  vectorX DataVector of regulator
-	 * @param  vectorY DataVector of target
+	 * @param  vectorX short[] of regulator
+	 * @param  vectorY short[] of target
 	 */
-	 public static double hapMI(DataVector vectorX, DataVector vectorY){
+	 public static double hapMI(short[] vectorX, short[] vectorY){
 		// Preranked matrices for candidate interactors might not overlap perfectly, thus requires reranking
-		ArrayList<short[]> splitQuad = vectorX.getQuadrants(vectorY);
+		ArrayList<short[]> splitQuad = splitQuadrants(vectorX, vectorY);
 		short[] valuesX = splitQuad.get(0);
 		short[] valuesY = splitQuad.get(1);
 
@@ -342,7 +416,7 @@ public class MI {
 			mi = computeMI(valuesX,valuesY,(short)0,(short)(valuesX.length),(short)0,(short)(valuesY.length),firstLoop);
 		}
 
-		int numberOfSamples = vectorX.values.length;
+		int numberOfSamples = vectorX.length;
 		mi += getInformation(na1, na1+bothNACount, na1+valuesY.length);
 		mi += getInformation(na2, na2+bothNACount, na2+valuesY.length);
 		mi += getInformation(bothNACount, bothNACount+na1, bothNACount+na2);
@@ -359,13 +433,6 @@ public class MI {
 	 * @param  vectorX Array of ranks of regulator
 	 * @param  vectorY Arrau of ranks of target
 	 */
-	public static double computeMI(short[] vectorX, short[] vectorY){
-		boolean firstLoop = true;
-		return computeMI(vectorX,vectorY,(short)0,(short)vectorX.length,(short)0,(short)vectorY.length,firstLoop)
-				/vectorX.length 
-				+ Math.log(vectorX.length); // TODO why this (proof on whiteboard picture by Yishai, late January 2015)
-	}
-
 	private static double computeMI(
 			short[] vectorX,
 			short[] vectorY,

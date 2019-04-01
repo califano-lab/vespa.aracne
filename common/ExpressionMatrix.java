@@ -14,8 +14,6 @@ import org.apache.commons.math3.stat.ranking.NaturalRanking;
 import org.apache.commons.math3.stat.ranking.TiesStrategy;
 import org.apache.commons.math3.stat.ranking.NaNStrategy;
 
-import common.DataVector;
-
 /**
  * Generates ExpressionMatrix object from expression matrix file accounting for missing values
  *
@@ -104,27 +102,35 @@ public class ExpressionMatrix {
 	}
 
 	/**
-	 * Generates HashMap linking genes with a DataVector of ranks and NA status.
+	 * Generates HashMap linking genes with ranks and 0 indicating NA status.
 	 * Ranking is conducted in ascending order with ties being resolved randomly.
 	 *
-	 * @return HashMap<String,DataVector> HashMap linking genes with a DataVector of ranks and NA status
+	 * @return HashMap<String,short[]> HashMap linking genes with ranks and NA status
 	 */
-	public HashMap<String,DataVector> rank(RandomGenerator random){
-		HashMap<String,DataVector> rankData = new HashMap<String, DataVector>();
+	public HashMap<String,short[]> rank(RandomGenerator random){
+		HashMap<String,short[]> rankData = new HashMap<String,short[]>();
 
 		int i = 0;
 		for(String gene : genes){
 			double[] inputVector = data[i];
-			boolean[] naVector = naBoolean[i];
+			// Add white noise to break ties
+			for(int ii = 0; ii<inputVector.length; ii++){
+				 inputVector[ii] = inputVector[ii] + random.nextDouble() / 1e5;
+			}
 
 			short[] rankedVector = new short[inputVector.length];
 			// NAs are ignored (returned unchanged) and ties are resolved randomly
-			double[] rankedDoubleVector = new NaturalRanking(NaNStrategy.FIXED, random).rank(inputVector);
+			double[] rankedDoubleVector = new NaturalRanking(NaNStrategy.FIXED, TiesStrategy.SEQUENTIAL).rank(inputVector);
 			for(int j=0; j<rankedDoubleVector.length; j++){
-				rankedVector[j] = (short)rankedDoubleVector[j];
+				if (rankedDoubleVector[j]==Double.NaN) {
+					rankedVector[j] = 0;
+				}
+				else {
+					rankedVector[j] = (short)rankedDoubleVector[j];
+				}
 			}
 
-			rankData.put(gene, new DataVector(rankedVector));
+			rankData.put(gene, rankedVector);
 			i++;
 		}
 		return(rankData);
