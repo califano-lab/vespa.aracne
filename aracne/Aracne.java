@@ -18,7 +18,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
-import java.util.Random;
+
+import org.apache.commons.math3.random.MersenneTwister;
+import org.apache.commons.math3.random.RandomAdaptor;
 
 import aracne.BootstrapConsolidator;
 
@@ -29,7 +31,7 @@ import common.DataVector;
 public class Aracne {
 	// Variable definition
 	static NumberFormat formatter = new DecimalFormat("0.###E0");
-	static Random random = new Random();
+	static MersenneTwister random = new MersenneTwister();
 
 	// Main Method
 	public static void main(String[] args) throws Exception {
@@ -137,9 +139,9 @@ public class Aracne {
 		
 		// Set seed if specified
 		if(seed!=null){
-			random = new Random(seed);
+			random = new MersenneTwister(seed);
 		} else{
-			random = new Random();
+			random = new MersenneTwister();
 		}
 
 		// Read expression matrix if present
@@ -175,7 +177,7 @@ public class Aracne {
 		}
 		// ARACNe bootstrapping / standard mode
 		else if(!isConsolidate){
-			String processId = new BigInteger(130, random).toString(32);
+			String processId = new BigInteger(130, new RandomAdaptor(random)).toString(32);
 
 			runAracne(
 					em,
@@ -197,7 +199,7 @@ public class Aracne {
 	// ARACNe MI Threshold mode
 	private static void runThreshold(ExpressionMatrix em, String[] regulators, File outputFolder, double fwer, int seed) throws NumberFormatException, Exception{
 		// Generate ranked data
-		HashMap<String, DataVector> rankData = em.rankDV(random);
+		HashMap<String, DataVector> rankData = em.rank(random);
 
 		// Get number of samples and genes
 		int sampleNumber = em.getSamples().size();
@@ -239,9 +241,9 @@ public class Aracne {
 		if(!nobootstrap){
 			System.out.println("Bootstrapping input matrix with "+em.getGenes().size()+" genes and "+em.getSamples().size()+" samples.");
 			ExpressionMatrix bootstrapped = em.bootstrap(random);
-			rankData = bootstrapped.rankDV(random);
+			rankData = bootstrapped.rank(random);
 		} else {
-			rankData = em.rankDV(random);
+			rankData = em.rank(random);
 		}
 
 		// Apply directional DPI if activators were specified

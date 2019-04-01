@@ -5,7 +5,7 @@ import java.util.ArrayList;
 /**
  * DataVector is a generic structure to store ranked vectors and NA values
  *
- * @param  values A ranked vector, where 0 == NA and all other ranks are integers.
+ * @param  values A ranked vector, where NaN == NA and all other ranks are integers.
  * @return DataVector
  */
 public class DataVector {
@@ -17,7 +17,7 @@ public class DataVector {
 	public DataVector(short[] values){
 		boolean[] na = new boolean[values.length];
 		for (int i = 0; i<values.length; i++){
-			if (values[i]==0){
+			if (values[i]==Double.NaN){
 				na[i] = true;
 			} else {
 				na[i] = false;

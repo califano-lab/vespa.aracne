@@ -10,7 +10,6 @@ import java.util.concurrent.Executors;
 import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
 
 import common.DataVector;
-import common.Methods;
 
 /**
  * Computes mutual information between regulators and targets by hybrid adaptive partitioning.

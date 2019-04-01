@@ -5,8 +5,14 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Random;
+
+import org.apache.commons.math3.random.RandomGenerator;
+import org.apache.commons.math3.stat.ranking.NaturalRanking;
+import org.apache.commons.math3.stat.ranking.TiesStrategy;
+import org.apache.commons.math3.stat.ranking.NaNStrategy;
 
 import common.DataVector;
 
@@ -86,7 +92,7 @@ public class ExpressionMatrix {
 							data[i-1][j-1] = Double.parseDouble(splitter[j]);
 							naBoolean[i-1][j-1] = false;
 						} else {
-							data[i-1][j-1] = 0;
+							data[i-1][j-1] = Double.NaN;
 							naBoolean[i-1][j-1] = true;
 						}
 					}
@@ -96,93 +102,53 @@ public class ExpressionMatrix {
 		}
 		br.close();
 	}
-		
-	// Rank with white noise
-	public HashMap<String,short[]> rank(Random random){
-		HashMap<String,short[]> rankData = new HashMap<String, short[]>();
 
-		int i = 0;
-		for(String gene : genes){
-			double[] inputVector = data[i];
-			boolean[] naVector = naBoolean[i];
-			// Add white noise to break ties
-			for(int ii = 0; ii<inputVector.length; ii++){
-				 inputVector[ii] = inputVector[ii] + random.nextDouble() / 1e5;
-			}
-			
-			short[] values = Methods.rankVector(inputVector,naVector);
-			rankData.put(gene, values);
-			i++;
-		}
-
-		return(rankData);
-	}
-
-	// Rank with white noise
-	public HashMap<String,DataVector> rankDV(Random random){
+	/**
+	 * Generates HashMap linking genes with a DataVector of ranks and NA status.
+	 * Ranking is conducted in ascending order with ties being resolved randomly.
+	 *
+	 * @return HashMap<String,DataVector> HashMap linking genes with a DataVector of ranks and NA status
+	 */
+	public HashMap<String,DataVector> rank(RandomGenerator random){
 		HashMap<String,DataVector> rankData = new HashMap<String, DataVector>();
 
 		int i = 0;
 		for(String gene : genes){
 			double[] inputVector = data[i];
 			boolean[] naVector = naBoolean[i];
-			// Add white noise to break ties
-			for(int ii = 0; ii<inputVector.length; ii++){
-				 inputVector[ii] = inputVector[ii] + random.nextDouble() / 1e5;
+
+			short[] rankedVector = new short[inputVector.length];
+			// NAs are ignored (returned unchanged) and ties are resolved randomly
+			double[] rankedDoubleVector = new NaturalRanking(NaNStrategy.FIXED, random).rank(inputVector);
+			for(int j=0; j<rankedDoubleVector.length; j++){
+				rankedVector[j] = (short)rankedDoubleVector[j];
 			}
-			
-			short[] values = Methods.rankVector(inputVector,naVector);
-			rankData.put(gene, new DataVector(values));
+
+			rankData.put(gene, new DataVector(rankedVector));
 			i++;
 		}
 		return(rankData);
 	}
 	
-	// Rank without white noise
-	public HashMap<String,short[]> rank(){
-		HashMap<String,short[]> rankData = new HashMap<String, short[]>();
-
-		int i = 0;
-		for(String gene : genes){
-			double[] inputVector = data[i];
-			boolean[] naVector = naBoolean[i];
-			short[] values = Methods.rankVector(inputVector,naVector);
-			rankData.put(gene, values);
-			i++;
-		}
-		return(rankData);
-	}
-
-	// Rank without white noise
-	public HashMap<String,DataVector> rankDV(){
-		HashMap<String,DataVector> rankData = new HashMap<String, DataVector>();
-
-		int i = 0;
-		for(String gene : genes){
-			double[] inputVector = data[i];
-			boolean[] naVector = naBoolean[i];
-			short[] values = Methods.rankVector(inputVector,naVector);
-			rankData.put(gene, new DataVector(values));
-			i++;
-		}
-		return(rankData);
-	}
-
-	public ExpressionMatrix bootstrap(Random random){
-
-		// Which samples to get
+	/**
+	 * Generates bootstrapped data matrix
+	 *
+	 * @param random Random number generator 
+	 * @return Bootstrapped expression matrix
+	 */
+	public ExpressionMatrix bootstrap(RandomGenerator random){
+		// Select samples randomly
 		int[] bootsamples = new int[samples.size()];
 		for(int i = 0; i<bootsamples.length; i++){
 			bootsamples[i] = random.nextInt(samples.size()-1);
 		}
 		this.bootsamples=bootsamples;
-		// Generate a bootstrapped data
+		// Generate bootstrapped data structure
 		double[][] newdata = new double[genes.size()][samples.size()];
 		boolean[][] newdataNA = new boolean[genes.size()][samples.size()];
 		for(int i = 0; i<genes.size(); i++){
 			for(int j = 0; j<samples.size(); j++){
-				// Add white noise to break ties
-				newdata[i][j] = data[i][bootsamples[j]] + random.nextDouble() / 1e5;
+				newdata[i][j] = data[i][bootsamples[j]];
 				newdataNA[i][j] = naBoolean[i][bootsamples[j]];
 			}
 		}
@@ -190,14 +156,18 @@ public class ExpressionMatrix {
 		return(em);
 	}
 
+	/**
+	 * Generates bootstrapped data matrix according to specified input samples
+	 *
+	 * @param bootsamples The input vector of bootstrapped samples
+	 * @return Bootstrapped expression matrix
+	 */
 	public ExpressionMatrix bootstrap(int[] bootsamples){
-		Random noiseGenerator = new Random();
 		double[][] newdata = new double[genes.size()][samples.size()];
 		boolean[][] newdataNA = new boolean[genes.size()][samples.size()];
 		for(int i = 0; i<genes.size(); i++){
 			for(int j = 0; j<samples.size(); j++){
-				// Add white noise to break ties
-				newdata[i][j] = data [i][bootsamples[j]] + noiseGenerator.nextDouble() / 1e5;
+				newdata[i][j] = data [i][bootsamples[j]];
 				newdataNA[i][j] = naBoolean[i][bootsamples[j]];
 			}		
 		}
