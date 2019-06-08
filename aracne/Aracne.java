@@ -48,7 +48,6 @@ public class Aracne {
 		options.addOption("t", "threshold", false, "Run ARACNe in MI threshold estimation mode");
 		options.addOption("nd", "nodpi", false, "Run ARACNe without DPI");
 		options.addOption("nb", "nobootstrap", false, "Run ARACNe without bootstrapping");
-		options.addOption("nm", "nobonferroni", false, "Run ARACNe without Bonferroni correction");
 
 		// Arguments with values
 		options.addOption("e", "expfile", true, "Expression Matrix (M x N); M=genes, N=samples; Designate missing values with NA");
@@ -59,13 +58,13 @@ public class Aracne {
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
 		options.addOption("p", "pvalue", true, "P-value threshold for the Poisson test of edge significance [default: 0.05]");
+		options.addOption("m", "multipletesting", true, "Method for multiple-testing correction [BH, Bonferroni, none; default: BH]");
 
 		// Default arguments
 		boolean isConsolidate = false;
 		boolean isThreshold = false;
 		boolean noDPI = false;
 		boolean nobootstrap = false;
-		boolean nobonferroni = false;
 
 		String expPath = null;
 		String outputPath = null;
@@ -74,7 +73,8 @@ public class Aracne {
 		Double fwer = 0.05;
 		Integer seed = null;
 		Integer threadCount = 1;
-		Double pvalue = 0.05; 
+		Double pvalue = 0.05;
+		String multipletesting = "BH";
 
 		// Parse arguments
 		try {
@@ -91,9 +91,6 @@ public class Aracne {
 			}
 			if (cmd.hasOption("nobootstrap")) {
 				nobootstrap = true;
-			}
-			if (cmd.hasOption("nobonferroni")) {
-				nobonferroni = true;
 			}
 			if (cmd.hasOption("pvalue")) {
 				pvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
@@ -118,6 +115,15 @@ public class Aracne {
 			}
 			if (cmd.hasOption("activators")) {
 				activatorsPath = (String)cmd.getOptionValue("activators");
+			}
+
+			if (cmd.hasOption("multipletesting")) {
+				if (Arrays.asList("BH", "Bonferroni", "none").contains((String)cmd.getOptionValue("multipletesting"))) {
+					multipletesting = (String)cmd.getOptionValue("multipletesting");
+				}
+				else {
+					throw new ParseException("Unknown method specified for multiple-testing correction");
+				}
 			}
 
 			if (isConsolidate && outputPath==null) {
@@ -191,7 +197,7 @@ public class Aracne {
 					);
 		// ARACNe consolidation mode
 		} else {
-			runConsolidate(outputFolder,nobonferroni,pvalue);
+			runConsolidate(outputFolder,multipletesting,pvalue);
 		}
 	}
 
@@ -297,8 +303,8 @@ public class Aracne {
 	}
 
 	// ARACNe consolidation mode
-	private static void runConsolidate(File outputFolder, boolean nobonferroni, Double pvalue) throws IOException {
-		BootstrapConsolidator c = new BootstrapConsolidator(nobonferroni);
+	private static void runConsolidate(File outputFolder, String multipletesting, Double pvalue) throws IOException {
+		BootstrapConsolidator c = new BootstrapConsolidator(multipletesting);
 		c.mergeFiles(outputFolder);
 		String outputFile = outputFolder.getAbsolutePath()+"/network.txt";
 
