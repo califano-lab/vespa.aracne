@@ -18,6 +18,7 @@ import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
  * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
  * @param  activators (Optional) array of activators (e.g. kinases)
  * @param  miThreshold MI threshold to use to restrict networks
+ * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
  * @param  threadCount Number of threads to use
  */
 public class MI {
@@ -28,10 +29,14 @@ public class MI {
 
 	// Computed MI threshold
 	private double miThreshold;
+	// Defined MI threshold
+	private double correlationThreshold;
 	// Computed MI between regulators and targets
 	private HashMap<String, HashMap<String, Double>> finalNetwork;
 	// Computed sign of correlation between regulators and targets (activation: true, deactivation: false)
 	private HashMap<String, HashMap<String, Boolean>> finalNetworkSign;
+	// Computed correlation between regulators and targets
+	private HashMap<String, HashMap<String, Double>> finalNetworkCorrelation;
 
 	/**
 	 * Constructor for standard ARACNe mode (multi-threaded)
@@ -40,6 +45,7 @@ public class MI {
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
 	 * @param  miThreshold MI threshold to use to restrict networks
+	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  threadCount Number of threads to use
 	 */
 	public MI(
@@ -47,6 +53,7 @@ public class MI {
 			String[] regulators,
 			String[] activators,
 			Double miThreshold,
+			Double correlationThreshold,
 			Integer threadCount
 			) {
 		// Set genes
@@ -56,17 +63,20 @@ public class MI {
 		// Loop to check which edges are kept. It will generate the finalNetwork and finalNetworkSign HashMap
 		finalNetwork = new HashMap<String, HashMap<String, Double>>();
 		finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
+		finalNetworkCorrelation = new HashMap<String, HashMap<String, Double>>();
 		for(int i=0; i<regulators.length; i++){
 			HashMap<String, Double> tt = new HashMap<String, Double>();
 			HashMap<String, Boolean> ttSign = new HashMap<String, Boolean>();
+			HashMap<String, Double> ttCorrelation = new HashMap<String, Double>();
 			finalNetwork.put(regulators[i], tt);
 			finalNetworkSign.put(regulators[i], ttSign);
+			finalNetworkCorrelation.put(regulators[i], ttCorrelation);
 		}
 
 		// Parallelized MI computation
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<regulators.length; i++){
-			MIThread mt = new MIThread(rankData, genes, regulators, activators, miThreshold, i);
+			MIThread mt = new MIThread(rankData, genes, regulators, activators, miThreshold, correlationThreshold, i);
 			executor.execute(mt);
 		}
 
@@ -86,6 +96,7 @@ public class MI {
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
 	 * @param  miThreshold MI threshold to use to restrict networks
+	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  regulatorIndex Index of processed regulator
 	 */
 	class MIThread extends Thread {
@@ -95,6 +106,7 @@ public class MI {
 		private String[] regulators;
 		private String[] activators;
 		private double miThreshold;
+		private double correlationThreshold;
 		private int regulatorIndex;
 
 		// Constructor
@@ -104,6 +116,7 @@ public class MI {
 			String[] regulators,
 			String[] activators,
 			double miThreshold,
+			double correlationThreshold,
 			int regulatorIndex)
 		{
 			this.rankData = rankData;
@@ -111,6 +124,7 @@ public class MI {
 			this.regulators = regulators;
 			this.activators = activators;
 			this.miThreshold = miThreshold;
+			this.correlationThreshold = correlationThreshold;
 			this.regulatorIndex = regulatorIndex;
 		}
 
@@ -142,27 +156,33 @@ public class MI {
 							correlation = new SpearmansCorrelation().correlation(vX,vY);
 						}
 						
-						if (correlation!=Double.NaN){
+						if (!Double.isNaN(correlation)){
 							// Compute sign from correlation
 							boolean sign =( ((int)Math.signum(correlation)) == 1);
 							// If activators are specified, ensure that computed mode is correct
 							if(activators!=null){
-								if(Arrays.asList(activators).contains( regulators[regulatorIndex]) & sign){
+								if(Arrays.asList(activators).contains( regulators[regulatorIndex]) & (sign | Math.abs(correlation) < correlationThreshold)){
 										setMI(regulators[regulatorIndex], genes[j], mi);
-										setSign(regulators[regulatorIndex], genes[j], sign);
-								}else if((!Arrays.asList(activators).contains( regulators[regulatorIndex])) & !sign){
+										setSign(regulators[regulatorIndex], genes[j], true);
+										setCorrelation(regulators[regulatorIndex], genes[j], (1.0*Math.abs(correlation)));
+								}else if(!Arrays.asList(activators).contains( regulators[regulatorIndex]) & (!sign | Math.abs(correlation) < correlationThreshold)){
 										setMI(regulators[regulatorIndex], genes[j], mi);
-										setSign(regulators[regulatorIndex], genes[j], sign);
+										setSign(regulators[regulatorIndex], genes[j], false);
+										setCorrelation(regulators[regulatorIndex], genes[j], (-1.0*(Math.abs(correlation))));
 								}
 							// If activators are not specified, just report all results
 							}else{
 								setMI(regulators[regulatorIndex], genes[j], mi);
 								setSign(regulators[regulatorIndex], genes[j], sign);
+								setCorrelation(regulators[regulatorIndex], genes[j], correlation);
 							}
 						}
 					}
 				}
 			}
+		}
+		private synchronized void setCorrelation(String _tf, String _gene, Double _correlation){
+			finalNetworkCorrelation.get(_tf).put(_gene, _correlation);
 		}
 		private synchronized void setSign(String _tf, String _gene, boolean _sign){
 			finalNetworkSign.get(_tf).put(_gene, _sign);
@@ -583,6 +603,10 @@ public class MI {
 
 	public HashMap<String, HashMap<String, Boolean>> getFinalNetworkSign() {
 		return finalNetworkSign;
+	}
+
+	public HashMap<String, HashMap<String, Double>> getFinalNetworkCorrelation() {
+		return finalNetworkCorrelation;
 	}
 
 	public short median(short[] input){

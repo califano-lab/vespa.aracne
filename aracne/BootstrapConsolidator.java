@@ -26,7 +26,7 @@ public class BootstrapConsolidator {
 	private HashMap<String, Double> mi = new HashMap<String, Double>();
 	private HashMap<String, Double> pvalue = new HashMap<String, Double>();
 	private HashMap<String, Double> pvalue_adjusted = new HashMap<String, Double>();
-	private HashMap<String, Double> sign = new HashMap<String, Double>();
+	private HashMap<String, Double> correlation = new HashMap<String, Double>();
 
 	private HashSet<String> tfs = new HashSet<String>();
 	private HashSet<String> targets = new HashSet<String>();
@@ -70,22 +70,12 @@ public class BootstrapConsolidator {
 							if(edgesOccurrences.containsKey(key)){
 								edgesOccurrences.put(key, edgesOccurrences.get(key)+1);
 								mi.put(key, mi.get(key)+Double.parseDouble(sp[2]));
-								if (Boolean.parseBoolean(sp[3]) == true)
-								{
-									sign.put(key, sign.get(key)+1.0);
-								} else {
-									sign.put(key, sign.get(key)-1.0);
-								}
+								correlation.put(key, correlation.get(key)+Double.parseDouble(sp[3]));
 							}
 							else{
 								edgesOccurrences.put(key, 1);
 								mi.put(key, Double.parseDouble(sp[2]));
-								if (Boolean.parseBoolean(sp[3]) == true)
-								{
-									sign.put(key, 1.0);
-								} else {
-									sign.put(key, -1.0);
-								}
+								correlation.put(key, Double.parseDouble(sp[3]));
 							}
 						}
 					}
@@ -104,7 +94,7 @@ public class BootstrapConsolidator {
 			// Calculate the average mi of each edge
 			int edgeOccurrence=edgesOccurrences.get(key);
 			mi.put(key, mi.get(key)/edgeOccurrence);
-			sign.put(key, sign.get(key)/edgeOccurrence);
+			correlation.put(key, correlation.get(key)/edgeOccurrence);
 			allCount += edgeOccurrence; // Total number of edges in all the bootstrap files
 			if(edgeOccurrence > maxCount){
 				maxCount = edgeOccurrence; // Edge with the most count
@@ -167,7 +157,7 @@ public class BootstrapConsolidator {
 			BufferedWriter bw = new BufferedWriter(new FileWriter(new File(outFile)));
 
 			// Header
-			bw.write("Regulator\tTarget\tMI\tpvalue\tsign\n");
+			bw.write("Regulator\tTarget\tMI\tCorrelation\tPvalue\n");
 
 			String[] keys = edgesOccurrences.keySet().toArray(new String[0]);
 			for(String key : keys){
@@ -175,7 +165,7 @@ public class BootstrapConsolidator {
 
 				if(pvalue_adjusted.get(key) < poissonPvalue){
 					String[] sp = key.split("#");
-					bw.write(sp[0]+"\t"+sp[1]+"\t"+mi.get(key)+"\t"+pvalue_adjusted.get(key)+"\t"+sign.get(key)+"\n");
+					bw.write(sp[0]+"\t"+sp[1]+"\t"+mi.get(key)+"\t"+correlation.get(key)+"\t"+pvalue_adjusted.get(key)+"\n");
 				}
 			}
 			bw.close();

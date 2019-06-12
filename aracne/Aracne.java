@@ -55,6 +55,7 @@ public class Aracne {
 		options.addOption("r", "regulators", true, "Regulator identifier file (e.g. transcription factors or kinases & phosphatases)");
 		options.addOption("a", "activators", true, "Activator identifier file (e.g. kinases)");
 		options.addOption("f", "fwer", true, "Threshold estimation mode: family-wise error-rate [default: 0.05]");
+		options.addOption("ct", "correlationthreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
 		options.addOption("p", "pvalue", true, "P-value threshold for the Poisson test of edge significance [default: 0.05]");
@@ -71,6 +72,7 @@ public class Aracne {
 		String regulatorsPath = null;
 		String activatorsPath = null;
 		Double fwer = 0.05;
+		Double correlationThreshold = 0.25;
 		Integer seed = null;
 		Integer threadCount = 1;
 		Double pvalue = 0.05;
@@ -97,6 +99,9 @@ public class Aracne {
 			}
 			if (cmd.hasOption("fwer")) {
 				fwer = Double.parseDouble(cmd.getOptionValue("fwer"));
+			}
+			if (cmd.hasOption("correlationThreshold")) {
+				fwer = Double.parseDouble(cmd.getOptionValue("correlationThreshold"));
 			}
 			if (cmd.hasOption("seed")) {
 				seed = Integer.parseInt(cmd.getOptionValue("seed"));
@@ -191,6 +196,7 @@ public class Aracne {
 					outputFolder,
 					processId,
 					fwer,
+					correlationThreshold,
 					threadCount,
 					noDPI,
 					nobootstrap
@@ -235,6 +241,7 @@ public class Aracne {
 			File outputFolder, 
 			String processId,
 			Double fwer,
+			Double correlationThreshold,
 			Integer threadCount,
 			boolean noDPI, // Do not use DPI
 			boolean nobootstrap // Do not use bootstrap
@@ -270,12 +277,14 @@ public class Aracne {
 		long time1 = System.currentTimeMillis();
 		System.out.println("Compute network.");
 
-		MI miCPU = new MI(rankData,regulators,activators,miThreshold,threadCount);
+		MI miCPU = new MI(rankData,regulators,activators,miThreshold,correlationThreshold,threadCount);
 
 		// MI between two interactors
 		HashMap<String, HashMap<String, Double>> finalNetwork = miCPU.getFinalNetwork();
-		// Correlation sign (directionality) between two interactors
+		// Correlation between two interactors
 		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = miCPU.getFinalNetworkSign();
+		// Correlation between two interactors
+		HashMap<String, HashMap<String, Double>> finalNetworkCorrelation = miCPU.getFinalNetworkCorrelation();
 
 		System.out.println("Time elapsed for calculating MI: "+(System.currentTimeMillis() - time1)/1000+" sec\n");
 
@@ -296,7 +305,7 @@ public class Aracne {
 		} else {
 			outputFile = new File(outputFolder.getAbsolutePath()+"/bootstrapNetwork_"+processId+".txt");
 		}
-		writeFinal(outputFile,removedEdges,finalNetwork,finalNetworkSign);
+		writeFinal(outputFile,removedEdges,finalNetwork,finalNetworkCorrelation);
 
 		long finalTime = System.currentTimeMillis();
 		System.out.println("Total time elapsed: "+(finalTime - initialTime)/1000+" sec");
@@ -335,7 +344,7 @@ public class Aracne {
 	File finalDPIfile, 
 		HashMap<String, HashSet<String>> removedEdges,
 		HashMap<String, HashMap<String, Double>> finalNet,
-		HashMap<String, HashMap<String, Boolean>> finalNetSign){
+		HashMap<String, HashMap<String, Double>> finalNetCorrelation){
 		try{
 			int left = 0;
 			int removed = 0;
@@ -343,7 +352,7 @@ public class Aracne {
 			BufferedWriter bw = new BufferedWriter(new FileWriter(finalDPIfile));
 
 			// Header
-			bw.write("Regulator\tTarget\tMI\tSign\n");
+			bw.write("Regulator\tTarget\tMI\tCorrelation\n");
 
 			for(String k : finalNet.keySet()){
 				HashSet<String> tr = null;
@@ -356,7 +365,7 @@ public class Aracne {
 
 				for(String kk : finalNet.get(k).keySet()){
 					if(!tr.contains(kk)){
-						bw.write(k+"\t"+kk+"\t"+finalNet.get(k).get(kk)+"\t" + finalNetSign.get(k).get(kk) +"\n");
+						bw.write(k+"\t"+kk+"\t"+finalNet.get(k).get(kk)+"\t" + finalNetCorrelation.get(k).get(kk) +"\n");
 						left++;
 					} else {
 						removed++;
