@@ -137,6 +137,9 @@ public class Aracne {
 			else if (!isConsolidate && (outputPath==null || expPath==null || regulatorsPath==null)) {
 				throw new ParseException("Required options: expfile, regulators and output");
 			}
+			else if (!isThreshold && (outputPath==null || expPath==null || regulatorsPath==null || seed==null)) {
+				throw new ParseException("Required options: expfile, regulators, output and seed");
+			}
 
 		} catch( ParseException exp ) {
 			HelpFormatter formatter = new HelpFormatter();
