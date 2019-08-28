@@ -55,6 +55,7 @@ public class Aracne {
 		options.addOption("r", "regulators", true, "Regulator identifier file (e.g. transcription factors or kinases & phosphatases)");
 		options.addOption("a", "activators", true, "Activator identifier file (e.g. kinases)");
 		options.addOption("f", "fwer", true, "Threshold estimation mode: family-wise error-rate [default: 0.05]");
+		options.addOption("i", "interactions", true,"Threshold estimation mode: maximum interactions to assess [default: 1000000]");
 		options.addOption("ct", "correlationthreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
@@ -72,6 +73,7 @@ public class Aracne {
 		String regulatorsPath = null;
 		String activatorsPath = null;
 		Double fwer = 0.05;
+		Integer interactions = 1000000;
 		Double correlationThreshold = 0.25;
 		Integer seed = null;
 		Integer threadCount = 1;
@@ -100,8 +102,11 @@ public class Aracne {
 			if (cmd.hasOption("fwer")) {
 				fwer = Double.parseDouble(cmd.getOptionValue("fwer"));
 			}
+			if (cmd.hasOption("interactions")) {
+				interactions = Integer.parseInt(cmd.getOptionValue("interactions"));
+			}
 			if (cmd.hasOption("correlationThreshold")) {
-				fwer = Double.parseDouble(cmd.getOptionValue("correlationThreshold"));
+				correlationThreshold = Double.parseDouble(cmd.getOptionValue("correlationThreshold"));
 			}
 			if (cmd.hasOption("seed")) {
 				seed = Integer.parseInt(cmd.getOptionValue("seed"));
@@ -134,11 +139,11 @@ public class Aracne {
 			if (isConsolidate && outputPath==null) {
 				throw new ParseException("Required option: output");
 			}
+			else if (isThreshold && (outputPath==null || expPath==null || regulatorsPath==null || seed==null)) {
+				throw new ParseException("Required options: expfile, regulators, output and seed");
+			}
 			else if (!isConsolidate && (outputPath==null || expPath==null || regulatorsPath==null)) {
 				throw new ParseException("Required options: expfile, regulators and output");
-			}
-			else if (!isThreshold && (outputPath==null || expPath==null || regulatorsPath==null || seed==null)) {
-				throw new ParseException("Required options: expfile, regulators, output and seed");
 			}
 
 		} catch( ParseException exp ) {
@@ -186,7 +191,7 @@ public class Aracne {
 		if(isThreshold){
 			outputFolder.mkdir();
 
-			runThreshold(em,regulators,outputFolder,fwer,seed);
+			runThreshold(em,regulators,outputFolder,fwer,interactions,seed);
 		}
 		// ARACNe bootstrapping / standard mode
 		else if(!isConsolidate){
@@ -211,7 +216,7 @@ public class Aracne {
 	}
 
 	// ARACNe MI Threshold mode
-	private static void runThreshold(ExpressionMatrix em, String[] regulators, File outputFolder, double fwer, int seed) throws NumberFormatException, Exception{
+	private static void runThreshold(ExpressionMatrix em, String[] regulators, File outputFolder, double fwer, int interactions, int seed) throws NumberFormatException, Exception{
 		// Generate ranked data
 		HashMap<String, short[]> rankData = em.rank(random);
 
@@ -232,7 +237,7 @@ public class Aracne {
 		System.out.println("Estimating p-value threshold for "+regulators.length+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
 
 		// Compute miThreshold and write to file
-		MI miCPU = new MI(rankData, regulators, miPvalue, seed);
+		MI miCPU = new MI(rankData, regulators, miPvalue, interactions, seed);
 		DataParser.writeValue(miCPU.getThreshold(), miThresholdFile);
 	}
 

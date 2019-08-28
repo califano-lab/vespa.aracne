@@ -198,12 +198,14 @@ public class MI {
 	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  miPvalue miPvalue for thresholding
+	 * @param  interactions Maximum number of interactions to assess
 	 * @param  seed Seed to use for reproducible results
 	 */
 	public MI(
 			HashMap<String, short[]> rankData, 
 			String[] regulators,
 			double miPvalue,
+			int interactions,
 			int seed
 			) {
 		// Set genes
@@ -214,7 +216,7 @@ public class MI {
 		this.regulators = regulators;
 
 		// Compute MI threshold
-		this.miThreshold = calibrateMIThreshold(rankData,miPvalue,seed);
+		this.miThreshold = calibrateMIThreshold(rankData,miPvalue,interactions,seed);
 	}
 
 	/**
@@ -223,12 +225,26 @@ public class MI {
 	 *
 	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  miPvalue miPvalue for thresholding
+	 * @param  interactions Maximum number of interactions to assess
 	 * @param  seed Seed to use for reproducible results
 	 */
-	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int seed){
+	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int interactions, int seed){
 		int numberOfSamples = rankData.get(genes[0]).length;
 
 		System.out.println("Finding threshold for "+genes.length+" genes and "+numberOfSamples+" samples.");
+
+		// Subsample regulators (with replacement) if necessary to meet threshold
+		System.out.println(regulators.length+" regulators and "+genes.length+" genes result in "+regulators.length*(genes.length-1)+" combinations.");
+		int maximum_regulators = (int) Math.floor(interactions / (genes.length-1));
+		System.out.println("Subsampling regulators to "+maximum_regulators+" to be below threshold of "+interactions+" maximum interactions.");
+
+        Random rand = new Random(); 
+		String[] newRegulators = new String[maximum_regulators]; 
+		for (int i=0; i<maximum_regulators; i++) { 
+			int randomIndex = rand.nextInt(regulators.length); 
+			newRegulators[i] = regulators[randomIndex]; 
+		}
+		regulators = newRegulators;
 
 		HashMap<String, short[]> tempData = new HashMap<String, short[]>();
 		Random r = new Random(seed);
