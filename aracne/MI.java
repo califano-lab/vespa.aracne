@@ -17,6 +17,7 @@ import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
  * @param  rankData HashMap linking gene identifiers with ranks
  * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
  * @param  activators (Optional) array of activators (e.g. kinases)
+ * @param  targets (Optional) array of targets (e.g. genes)
  * @param  miThreshold MI threshold to use to restrict networks
  * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
  * @param  threadCount Number of threads to use
@@ -26,6 +27,7 @@ public class MI {
 	private String[] genes;
 	private String[] regulators;
 	private String[] activators;
+	private String[] targets;
 
 	// Computed MI threshold
 	private double miThreshold;
@@ -44,6 +46,7 @@ public class MI {
 	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
+	 * @param  targets (Optional) array of targets (e.g. genes)
 	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  threadCount Number of threads to use
@@ -52,12 +55,14 @@ public class MI {
 			HashMap<String, short[]> rankData,
 			String[] regulators,
 			String[] activators,
+			String[] targets,
 			Double miThreshold,
 			Double correlationThreshold,
 			Integer threadCount
 			) {
 		// Set genes
-		this.genes = rankData.keySet().toArray(new String[0]);
+		// this.genes = rankData.keySet().toArray(new String[0]);
+		this.genes = targets;
 		Arrays.sort(genes);
 
 		// Loop to check which edges are kept. It will generate the finalNetwork and finalNetworkSign HashMap
@@ -197,6 +202,7 @@ public class MI {
 	 *
 	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
+	 * @param  targets (Optional) array of targets (e.g. genes)
 	 * @param  miPvalue miPvalue for thresholding
 	 * @param  interactions Maximum number of interactions to assess
 	 * @param  seed Seed to use for reproducible results
@@ -204,12 +210,14 @@ public class MI {
 	public MI(
 			HashMap<String, short[]> rankData, 
 			String[] regulators,
+			String[] targets,
 			double miPvalue,
 			int interactions,
 			int seed
 			) {
 		// Set genes
-		this.genes = rankData.keySet().toArray(new String[0]);
+		// this.genes = rankData.keySet().toArray(new String[0]);
+		this.genes = targets;
 		Arrays.sort(genes);
 
 		// Set regulators
@@ -231,10 +239,10 @@ public class MI {
 	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int interactions, int seed){
 		int numberOfSamples = rankData.get(genes[0]).length;
 
-		System.out.println("Finding threshold for "+genes.length+" genes and "+numberOfSamples+" samples.");
+		System.out.println("Finding threshold for "+genes.length+" targets and "+numberOfSamples+" samples.");
 
 		// Subsample regulators (with replacement) if necessary to meet threshold
-		System.out.println(regulators.length+" regulators and "+genes.length+" genes result in "+regulators.length*(genes.length-1)+" combinations.");
+		System.out.println(regulators.length+" regulators and "+genes.length+" targets result in "+regulators.length*(genes.length-1)+" combinations.");
 		int maximum_regulators = (int) Math.floor(interactions / (genes.length-1));
 		System.out.println("Subsampling regulators to "+maximum_regulators+" to be below threshold of "+interactions+" maximum interactions.");
 

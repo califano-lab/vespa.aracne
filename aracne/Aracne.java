@@ -54,9 +54,10 @@ public class Aracne {
 		options.addOption("o", "output", true, "Output directory");
 		options.addOption("r", "regulators", true, "Regulator identifier file (e.g. transcription factors or kinases & phosphatases)");
 		options.addOption("a", "activators", true, "Activator identifier file (e.g. kinases)");
+		options.addOption("tg", "targets", true, "Target identifier file (e.g. genes) [default: use all genes or proteins]");
 		options.addOption("f", "fwer", true, "Threshold estimation mode: family-wise error-rate [default: 0.05]");
 		options.addOption("i", "interactions", true,"Threshold estimation mode: maximum interactions to assess [default: 1000000]");
-		options.addOption("ct", "correlationthreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
+		options.addOption("c", "correlationthreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
 		options.addOption("p", "pvalue", true, "P-value threshold for the Poisson test of edge significance [default: 0.05]");
@@ -72,6 +73,7 @@ public class Aracne {
 		String outputPath = null;
 		String regulatorsPath = null;
 		String activatorsPath = null;
+		String targetsPath = null;
 		Double fwer = 0.05;
 		Integer interactions = 1000000;
 		Double correlationThreshold = 0.25;
@@ -125,6 +127,9 @@ public class Aracne {
 			}
 			if (cmd.hasOption("activators")) {
 				activatorsPath = (String)cmd.getOptionValue("activators");
+			}
+			if (cmd.hasOption("targets")) {
+				targetsPath = (String)cmd.getOptionValue("targets");
 			}
 
 			if (cmd.hasOption("multipletesting")) {
@@ -186,12 +191,24 @@ public class Aracne {
 			activators = DataParser.readGeneSet(activatorsFile, em.getGenes());
 		}
 
+		// Read targets file if present
+		File targetsFile = null;
+		String[] targets = null;
+		if(targetsPath != null){
+			targetsFile = new File(targetsPath);
+			targets = DataParser.readGeneSet(targetsFile, em.getGenes());
+		}
+		// Default: Use all genes as targets
+		else {
+			targets = em.getGenes().toArray(new String[em.getGenes().size()]);
+		}
+
 		// Main ARACNe routines
 		// ARACNe threshold estimation mode
 		if(isThreshold){
 			outputFolder.mkdir();
 
-			runThreshold(em,regulators,outputFolder,fwer,interactions,seed);
+			runThreshold(em,regulators,targets,outputFolder,fwer,interactions,seed);
 		}
 		// ARACNe bootstrapping / standard mode
 		else if(!isConsolidate){
@@ -201,6 +218,7 @@ public class Aracne {
 					em,
 					regulators,
 					activators,
+					targets,
 					outputFolder,
 					processId,
 					fwer,
@@ -216,13 +234,13 @@ public class Aracne {
 	}
 
 	// ARACNe MI Threshold mode
-	private static void runThreshold(ExpressionMatrix em, String[] regulators, File outputFolder, double fwer, int interactions, int seed) throws NumberFormatException, Exception{
+	private static void runThreshold(ExpressionMatrix em, String[] regulators, String[] targets, File outputFolder, double fwer, int interactions, int seed) throws NumberFormatException, Exception{
 		// Generate ranked data
 		HashMap<String, short[]> rankData = em.rank(random);
 
 		// Get number of samples and genes
 		int sampleNumber = em.getSamples().size();
-		int geneNumber = em.getGenes().size();
+		int targetNumber = targets.length;
 
 		// Initialize MI threshold file
 		File miThresholdFile = new File(outputFolder+"/fwer_"+formatter.format(fwer)+"_samples"+sampleNumber+".txt");
@@ -233,11 +251,11 @@ public class Aracne {
 		}
 
 		// Compute miPvalue for thresholding
-		double miPvalue = fwer / (regulators.length * geneNumber-1);
-		System.out.println("Estimating p-value threshold for "+regulators.length+" regulators, "+geneNumber+" genes and FWER="+fwer+": "+miPvalue);
+		double miPvalue = fwer / (regulators.length * targetNumber-1);
+		System.out.println("Estimating p-value threshold for "+regulators.length+" regulators, "+targetNumber+" targets and FWER="+fwer+": "+miPvalue);
 
 		// Compute miThreshold and write to file
-		MI miCPU = new MI(rankData, regulators, miPvalue, interactions, seed);
+		MI miCPU = new MI(rankData, regulators, targets, miPvalue, interactions, seed);
 		DataParser.writeValue(miCPU.getThreshold(), miThresholdFile);
 	}
 
@@ -246,6 +264,7 @@ public class Aracne {
 			ExpressionMatrix em,
 			String[] regulators,
 			String[] activators,
+			String[] targets,
 			File outputFolder, 
 			String processId,
 			Double fwer,
@@ -259,7 +278,7 @@ public class Aracne {
 		HashMap<String, short[]> rankData;
 		// Bootstrap matrix
 		if(!nobootstrap){
-			System.out.println("Bootstrapping input matrix with "+em.getGenes().size()+" genes and "+em.getSamples().size()+" samples.");
+			System.out.println("Bootstrapping input matrix with "+targets.length+" targets and "+em.getSamples().size()+" samples.");
 			ExpressionMatrix bootstrapped = em.bootstrap(random);
 			rankData = bootstrapped.rank(random);
 		} else {
@@ -285,7 +304,7 @@ public class Aracne {
 		long time1 = System.currentTimeMillis();
 		System.out.println("Compute network.");
 
-		MI miCPU = new MI(rankData,regulators,activators,miThreshold,correlationThreshold,threadCount);
+		MI miCPU = new MI(rankData,regulators,activators,targets,miThreshold,correlationThreshold,threadCount);
 
 		// MI between two interactors
 		HashMap<String, HashMap<String, Double>> finalNetwork = miCPU.getFinalNetwork();
