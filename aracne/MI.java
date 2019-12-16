@@ -247,7 +247,7 @@ public class MI {
 		System.out.println(regulators.length+" regulators and "+targets.length+" targets result in "+regulators.length*(targets.length-1)+" combinations.");
 		int maximum_regulators = (int) Math.floor(interactions / (targets.length-1));
 
-		if (regulators.length*(targets.length-1) < interactions) {
+		if (regulators.length*(targets.length-1) > interactions) {
 			System.out.println("Subsampling regulators to "+maximum_regulators+" to be below threshold of "+interactions+" maximum interactions.");
 
 			Random rand = new Random(); 
