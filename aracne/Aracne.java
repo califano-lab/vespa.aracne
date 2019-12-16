@@ -57,7 +57,7 @@ public class Aracne {
 		options.addOption("tg", "targets", true, "Target identifier file (e.g. genes) [default: use all genes or proteins]");
 		options.addOption("f", "fwer", true, "Threshold estimation mode: family-wise error-rate [default: 0.05]");
 		options.addOption("i", "interactions", true,"Threshold estimation mode: maximum interactions to assess [default: 1000000]");
-		options.addOption("c", "correlationthreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
+		options.addOption("ct", "correlationthreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
 		options.addOption("p", "pvalue", true, "P-value threshold for the Poisson test of edge significance [default: 0.05]");
