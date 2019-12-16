@@ -199,7 +199,7 @@ public class Aracne {
 			targets = DataParser.readGeneSet(targetsFile, em.getGenes());
 		}
 		// Default: Use all genes as targets
-		else {
+		else if (expPath != null){
 			targets = em.getGenes().toArray(new String[em.getGenes().size()]);
 		}
 
