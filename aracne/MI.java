@@ -216,12 +216,14 @@ public class MI {
 			int seed
 			) {
 		// Set genes
-		// this.genes = rankData.keySet().toArray(new String[0]);
-		this.genes = targets;
+		this.genes = rankData.keySet().toArray(new String[0]);
 		Arrays.sort(genes);
 
 		// Set regulators
 		this.regulators = regulators;
+
+		// Set regulators
+		this.targets = targets;
 
 		// Compute MI threshold
 		this.miThreshold = calibrateMIThreshold(rankData,miPvalue,interactions,seed);
@@ -239,20 +241,23 @@ public class MI {
 	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int interactions, int seed){
 		int numberOfSamples = rankData.get(genes[0]).length;
 
-		System.out.println("Finding threshold for "+genes.length+" targets and "+numberOfSamples+" samples.");
+		System.out.println("Finding threshold for "+targets.length+" targets and "+numberOfSamples+" samples.");
 
 		// Subsample regulators (with replacement) if necessary to meet threshold
-		System.out.println(regulators.length+" regulators and "+genes.length+" targets result in "+regulators.length*(genes.length-1)+" combinations.");
-		int maximum_regulators = (int) Math.floor(interactions / (genes.length-1));
-		System.out.println("Subsampling regulators to "+maximum_regulators+" to be below threshold of "+interactions+" maximum interactions.");
+		System.out.println(regulators.length+" regulators and "+targets.length+" targets result in "+regulators.length*(targets.length-1)+" combinations.");
+		int maximum_regulators = (int) Math.floor(interactions / (targets.length-1));
 
-        Random rand = new Random(); 
-		String[] newRegulators = new String[maximum_regulators]; 
-		for (int i=0; i<maximum_regulators; i++) { 
-			int randomIndex = rand.nextInt(regulators.length); 
-			newRegulators[i] = regulators[randomIndex]; 
+		if (regulators.length*(targets.length-1) < interactions) {
+			System.out.println("Subsampling regulators to "+maximum_regulators+" to be below threshold of "+interactions+" maximum interactions.");
+
+			Random rand = new Random(); 
+			String[] newRegulators = new String[maximum_regulators]; 
+			for (int i=0; i<maximum_regulators; i++) { 
+				int randomIndex = rand.nextInt(regulators.length); 
+				newRegulators[i] = regulators[randomIndex]; 
+			}
+			regulators = newRegulators;
 		}
-		regulators = newRegulators;
 
 		HashMap<String, short[]> tempData = new HashMap<String, short[]>();
 		Random r = new Random(seed);
@@ -282,9 +287,9 @@ public class MI {
 
 		// Estimate MI between all regulators and targets in subset
 		for(int i=0; i<regulators.length; i++){
-			for(int j=0; j<genes.length; j++){
-				if(!genes[j].equals(regulators[i])){
-					mit.add(hapMI(tempData.get(regulators[i]), tempData.get(genes[j])));
+			for(int j=0; j<targets.length; j++){
+				if(!targets[j].equals(regulators[i])){
+					mit.add(hapMI(tempData.get(regulators[i]), tempData.get(targets[j])));
 				}
 			}
 		}
