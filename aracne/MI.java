@@ -3,6 +3,7 @@ package aracne;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,6 +19,7 @@ import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
  * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
  * @param  activators (Optional) array of activators (e.g. kinases)
  * @param  targets (Optional) array of targets (e.g. genes)
+ * @param  interactionSet (Optional) HashSet of interactions
  * @param  miThreshold MI threshold to use to restrict networks
  * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
  * @param  threadCount Number of threads to use
@@ -28,6 +30,7 @@ public class MI {
 	private String[] regulators;
 	private String[] activators;
 	private String[] targets;
+	private HashSet<String> interactionSet;
 
 	// Computed MI threshold
 	private double miThreshold;
@@ -47,6 +50,7 @@ public class MI {
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
 	 * @param  targets (Optional) array of targets (e.g. genes)
+	 * @param  interactionSet (Optional) HashSet of interactions
 	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  threadCount Number of threads to use
@@ -56,6 +60,7 @@ public class MI {
 			String[] regulators,
 			String[] activators,
 			String[] targets,
+			HashSet<String> interactionSet,
 			Double miThreshold,
 			Double correlationThreshold,
 			Integer threadCount
@@ -81,7 +86,7 @@ public class MI {
 		// Parallelized MI computation
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<regulators.length; i++){
-			MIThread mt = new MIThread(rankData, genes, regulators, activators, miThreshold, correlationThreshold, i);
+			MIThread mt = new MIThread(rankData, genes, regulators, activators, interactionSet, miThreshold, correlationThreshold, i);
 			executor.execute(mt);
 		}
 
@@ -100,6 +105,7 @@ public class MI {
 	 * @param  genes Array of genes covered by rankData
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
+	 * @param  interactionSet (Optional) HashSet of interactions
 	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  regulatorIndex Index of processed regulator
@@ -110,6 +116,7 @@ public class MI {
 		private String[] genes;
 		private String[] regulators;
 		private String[] activators;
+		private HashSet<String> interactionSet;
 		private double miThreshold;
 		private double correlationThreshold;
 		private int regulatorIndex;
@@ -120,6 +127,7 @@ public class MI {
 			String[] genes,
 			String[] regulators,
 			String[] activators,
+			HashSet<String> interactionSet,
 			double miThreshold,
 			double correlationThreshold,
 			int regulatorIndex)
@@ -128,6 +136,7 @@ public class MI {
 			this.genes = genes;
 			this.regulators = regulators;
 			this.activators = activators;
+			this.interactionSet = interactionSet;
 			this.miThreshold = miThreshold;
 			this.correlationThreshold = correlationThreshold;
 			this.regulatorIndex = regulatorIndex;
@@ -135,7 +144,7 @@ public class MI {
 
 		public void run() {
 			for(int j=0; j<genes.length; j++){
-				if(!genes[j].equals(regulators[regulatorIndex])){
+				if(!genes[j].equals(regulators[regulatorIndex]) && interactionSet.contains(regulators[regulatorIndex]+"#"+genes[j])){
 					// Regulator ranks
 					short[] vectorX = rankData.get(regulators[regulatorIndex]);
 					// Target ranks
@@ -203,16 +212,18 @@ public class MI {
 	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  targets (Optional) array of targets (e.g. genes)
+	 * @param  interactionSet (Optional) HashSet of interactions
 	 * @param  miPvalue miPvalue for thresholding
-	 * @param  interactions Maximum number of interactions to assess
+	 * @param  maximumInteractions Maximum number of interactions to assess
 	 * @param  seed Seed to use for reproducible results
 	 */
 	public MI(
 			HashMap<String, short[]> rankData, 
 			String[] regulators,
 			String[] targets,
+			HashSet<String> interactionSet,
 			double miPvalue,
-			int interactions,
+			int maximumInteractions,
 			int seed
 			) {
 		// Set genes
@@ -222,11 +233,14 @@ public class MI {
 		// Set regulators
 		this.regulators = regulators;
 
-		// Set regulators
+		// Set targets
 		this.targets = targets;
 
+		// Set interactions
+		this.interactionSet = interactionSet;
+
 		// Compute MI threshold
-		this.miThreshold = calibrateMIThreshold(rankData,miPvalue,interactions,seed);
+		this.miThreshold = calibrateMIThreshold(rankData,miPvalue,maximumInteractions,seed);
 	}
 
 	/**
@@ -235,28 +249,24 @@ public class MI {
 	 *
 	 * @param  rankData HashMap linking gene identifiers with ranks
 	 * @param  miPvalue miPvalue for thresholding
-	 * @param  interactions Maximum number of interactions to assess
+	 * @param  maximumInteractions Maximum number of interactions to assess
 	 * @param  seed Seed to use for reproducible results
 	 */
-	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int interactions, int seed){
+	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int maximumInteractions, int seed){
 		int numberOfSamples = rankData.get(genes[0]).length;
 
-		System.out.println("Finding threshold for "+targets.length+" targets and "+numberOfSamples+" samples.");
 
-		// Subsample regulators (with replacement) if necessary to meet threshold
-		System.out.println(regulators.length+" regulators and "+targets.length+" targets result in "+regulators.length*(targets.length-1)+" combinations.");
-		int maximum_regulators = (int) Math.floor(interactions / (targets.length-1));
-
-		if (regulators.length*(targets.length-1) > interactions) {
-			System.out.println("Subsampling regulators to "+maximum_regulators+" to be below threshold of "+interactions+" maximum interactions.");
+		if (interactionSet.size() > maximumInteractions) {
+			System.out.println("Subsampling "+interactionSet.size()+" interactions to be below threshold of "+maximumInteractions+" maximum interactions.");
 
 			Random rand = new Random(); 
-			String[] newRegulators = new String[maximum_regulators]; 
-			for (int i=0; i<maximum_regulators; i++) { 
-				int randomIndex = rand.nextInt(regulators.length); 
-				newRegulators[i] = regulators[randomIndex]; 
+			HashSet<String> newInteractionsSet = new HashSet<String>();
+			String[] interactionArray = interactionSet.toArray(new String[0]);
+			for (int i=0; i<maximumInteractions; i++) { 
+				int randomIndex = rand.nextInt(interactionSet.size()); 
+				newInteractionsSet.add(interactionArray[randomIndex]); 
 			}
-			regulators = newRegulators;
+			interactionSet = newInteractionsSet;
 		}
 
 		HashMap<String, short[]> tempData = new HashMap<String, short[]>();
@@ -288,7 +298,7 @@ public class MI {
 		// Estimate MI between all regulators and targets in subset
 		for(int i=0; i<regulators.length; i++){
 			for(int j=0; j<targets.length; j++){
-				if(!targets[j].equals(regulators[i])){
+				if(!targets[j].equals(regulators[i]) && interactionSet.contains(regulators[i]+"#"+targets[j])){
 					mit.add(hapMI(tempData.get(regulators[i]), tempData.get(targets[j])));
 				}
 			}

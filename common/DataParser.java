@@ -8,6 +8,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Arrays;
 
 
@@ -91,6 +92,38 @@ public class DataParser {
 			}
 
 			return(regulatorsList);
+		}
+		catch(Exception e){
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	/**
+	 * Method to read an interaction list and ensure that all values are covered by the expression matrix
+	 */
+	public static HashMap<String, HashMap<String, Double>> readInteractionSet(File interactionsFile){
+		try{
+			BufferedReader br = new BufferedReader(new FileReader(interactionsFile));
+			String l = "";
+			HashMap<String, HashMap<String, Double>> interactionNetwork = new HashMap<String, HashMap<String, Double>>();
+			boolean firstline = true;
+			while((l = br.readLine()) != null){
+				if(firstline){
+					firstline=false;
+				} else {
+					String[] sp = l.split("\t");
+						HashMap<String, Double> interactionMap = new HashMap<String, Double>();
+						if (interactionNetwork.containsKey(sp[0])){
+							interactionMap = interactionNetwork.get(sp[0]);
+						}
+						interactionMap.put(sp[1], Double.parseDouble(sp[2]));
+						interactionNetwork.put(sp[0], interactionMap);
+				}
+			}
+			br.close();
+
+			return(interactionNetwork);
 		}
 		catch(Exception e){
 			e.printStackTrace();
