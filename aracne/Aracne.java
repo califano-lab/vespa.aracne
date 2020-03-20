@@ -46,8 +46,8 @@ public class Aracne {
 		// Flag arguments
 		options.addOption("c", "consolidate", false, "Run ARACNe in consolidation mode");
 		options.addOption("t", "threshold", false, "Run ARACNe in MI threshold estimation mode");
-		options.addOption("nd", "nodpi", false, "Run ARACNe without DPI");
-		options.addOption("nb", "nobootstrap", false, "Run ARACNe without bootstrapping");
+		options.addOption("nd", "noDPI", false, "Run ARACNe without DPI");
+		options.addOption("nb", "noBootstrap", false, "Run ARACNe without bootstrapping");
 
 		// Arguments with values
 		options.addOption("e", "expfile", true, "Expression Matrix (M x N); M=genes, N=samples; Designate missing values with NA");
@@ -57,18 +57,18 @@ public class Aracne {
 		options.addOption("tg", "targets", true, "Target identifier file (e.g. genes) [default: use all genes or proteins]");
 		options.addOption("i", "interactions", true, "Protein-protein interaction file (e.g. HSM/P physical interaction predictions)");
 		options.addOption("f", "fwer", true, "Threshold estimation mode: family-wise error-rate [default: 0.05]");
-		options.addOption("mi", "maximuminteractions", true,"Threshold estimation mode: maximum interactions to assess [default: 1000000]");
-		options.addOption("ct", "correlationthreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
+		options.addOption("mi", "maximumInteractions", true,"Threshold estimation mode: maximum interactions to assess [default: 1000000]");
+		options.addOption("ct", "correlationThreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
 		options.addOption("p", "pvalue", true, "P-value threshold for the Poisson test of edge significance [default: 0.05]");
-		options.addOption("m", "multipletesting", true, "Method for multiple-testing correction [BH, Bonferroni, none; default: BH]");
+		options.addOption("m", "multipleTesting", true, "Method for multiple-testing correction [BH, Bonferroni, none; default: BH]");
 
 		// Default arguments
 		boolean isConsolidate = false;
 		boolean isThreshold = false;
 		boolean noDPI = false;
-		boolean nobootstrap = false;
+		boolean noBootstrap = false;
 
 		String expPath = null;
 		String outputPath = null;
@@ -94,11 +94,11 @@ public class Aracne {
 			if (cmd.hasOption("threshold")) {
 				isThreshold = true;
 			}
-			if (cmd.hasOption("nodpi")) {
+			if (cmd.hasOption("noDPI")) {
 				noDPI = true;
 			}
-			if (cmd.hasOption("nobootstrap")) {
-				nobootstrap = true;
+			if (cmd.hasOption("noBootstrap")) {
+				noBootstrap = true;
 			}
 			if (cmd.hasOption("pvalue")) {
 				pvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
@@ -137,9 +137,9 @@ public class Aracne {
 				interactionsPath = (String)cmd.getOptionValue("interactions");
 			}
 
-			if (cmd.hasOption("multipletesting")) {
-				if (Arrays.asList("BH", "Bonferroni", "none").contains((String)cmd.getOptionValue("multipletesting"))) {
-					multipletesting = (String)cmd.getOptionValue("multipletesting");
+			if (cmd.hasOption("multipleTesting")) {
+				if (Arrays.asList("BH", "Bonferroni", "none").contains((String)cmd.getOptionValue("multipleTesting"))) {
+					multipletesting = (String)cmd.getOptionValue("multipleTesting");
 				}
 				else {
 					throw new ParseException("Unknown method specified for multiple-testing correction");
@@ -286,7 +286,7 @@ public class Aracne {
 					correlationThreshold,
 					threadCount,
 					noDPI,
-					nobootstrap
+					noBootstrap
 					);
 		// ARACNe consolidation mode
 		} else {
@@ -332,13 +332,13 @@ public class Aracne {
 			Double correlationThreshold,
 			Integer threadCount,
 			boolean noDPI, // Do not use DPI
-			boolean nobootstrap // Do not use bootstrap
+			boolean noBootstrap // Do not use bootstrap
 			) throws NumberFormatException, Exception {
 		long initialTime = System.currentTimeMillis();
 
 		HashMap<String, short[]> rankData;
 		// Bootstrap matrix
-		if(!nobootstrap){
+		if(!noBootstrap){
 			System.out.println("Bootstrapping input matrix with "+targets.length+" targets and "+em.getSamples().size()+" samples.");
 			ExpressionMatrix bootstrapped = em.bootstrap(random);
 			rankData = bootstrapped.rank(random);
@@ -388,8 +388,8 @@ public class Aracne {
 
 		// Write bootstrapped network to file
 		File outputFile;
-		if(nobootstrap){
-			outputFile = new File(outputFolder.getAbsolutePath()+"/nobootstrap_network.txt");
+		if(noBootstrap){
+			outputFile = new File(outputFolder.getAbsolutePath()+"/noBootstrap_network.txt");
 		} else {
 			outputFile = new File(outputFolder.getAbsolutePath()+"/bootstrapNetwork_"+processId+".txt");
 		}

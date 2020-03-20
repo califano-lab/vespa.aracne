@@ -113,12 +113,21 @@ public class DataParser {
 					firstline=false;
 				} else {
 					String[] sp = l.split("\t");
+						// protein A: regulator, protein B: target
 						HashMap<String, Double> interactionMap = new HashMap<String, Double>();
 						if (interactionNetwork.containsKey(sp[0])){
 							interactionMap = interactionNetwork.get(sp[0]);
 						}
 						interactionMap.put(sp[1], Double.parseDouble(sp[2]));
 						interactionNetwork.put(sp[0], interactionMap);
+
+						// protein B: regulator, protein A: target
+						HashMap<String, Double> interactionMap2 = new HashMap<String, Double>();
+						if (interactionNetwork.containsKey(sp[1])){
+							interactionMap2 = interactionNetwork.get(sp[1]);
+						}
+						interactionMap.put(sp[0], Double.parseDouble(sp[2]));
+						interactionNetwork.put(sp[1], interactionMap);
 				}
 			}
 			br.close();
