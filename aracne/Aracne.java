@@ -280,6 +280,7 @@ public class Aracne {
 					activators,
 					targets,
 					interactionsSet,
+					interactionsMap,
 					outputFolder,
 					processId,
 					fwer,
@@ -326,6 +327,7 @@ public class Aracne {
 			String[] activators,
 			String[] targets,
 			HashSet<String> interactionSet,
+			HashMap<String, HashMap<String, Double>> interactionsMap,
 			File outputFolder, 
 			String processId,
 			Double fwer,
@@ -365,10 +367,12 @@ public class Aracne {
 		long time1 = System.currentTimeMillis();
 		System.out.println("Compute network.");
 
-		MI miCPU = new MI(rankData,regulators,activators,targets,interactionSet,miThreshold,correlationThreshold,threadCount);
+		MI miCPU = new MI(rankData,regulators,activators,targets,interactionSet,interactionsMap,miThreshold,correlationThreshold,threadCount);
 
 		// MI between two interactors
 		HashMap<String, HashMap<String, Double>> finalNetwork = miCPU.getFinalNetwork();
+		// Prior between two interactors
+		HashMap<String, HashMap<String, Double>> finalNetworkPrior = miCPU.getFinalNetworkPrior();
 		// Correlation between two interactors
 		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = miCPU.getFinalNetworkSign();
 		// Correlation between two interactors
@@ -393,7 +397,7 @@ public class Aracne {
 		} else {
 			outputFile = new File(outputFolder.getAbsolutePath()+"/bootstrapNetwork_"+processId+".txt");
 		}
-		writeFinal(outputFile,removedEdges,finalNetwork,finalNetworkCorrelation);
+		writeFinal(outputFile,removedEdges,finalNetwork,finalNetworkCorrelation,finalNetworkPrior);
 
 		long finalTime = System.currentTimeMillis();
 		System.out.println("Total time elapsed: "+(finalTime - initialTime)/1000+" sec");
@@ -432,7 +436,8 @@ public class Aracne {
 	File finalDPIfile, 
 		HashMap<String, HashSet<String>> removedEdges,
 		HashMap<String, HashMap<String, Double>> finalNet,
-		HashMap<String, HashMap<String, Double>> finalNetCorrelation){
+		HashMap<String, HashMap<String, Double>> finalNetCorrelation,
+		HashMap<String, HashMap<String, Double>> finalNetPrior){
 		try{
 			int left = 0;
 			int removed = 0;
@@ -440,7 +445,7 @@ public class Aracne {
 			BufferedWriter bw = new BufferedWriter(new FileWriter(finalDPIfile));
 
 			// Header
-			bw.write("Regulator\tTarget\tMI\tCorrelation\n");
+			bw.write("Regulator\tTarget\tMI\tCorrelation\tPrior\n");
 
 			for(String k : finalNet.keySet()){
 				HashSet<String> tr = null;
@@ -453,7 +458,7 @@ public class Aracne {
 
 				for(String kk : finalNet.get(k).keySet()){
 					if(!tr.contains(kk)){
-						bw.write(k+"\t"+kk+"\t"+finalNet.get(k).get(kk)+"\t" + finalNetCorrelation.get(k).get(kk) +"\n");
+						bw.write(k+"\t"+kk+"\t"+finalNet.get(k).get(kk)+"\t" + finalNetCorrelation.get(k).get(kk)+"\t" + finalNetPrior.get(k).get(kk) +"\n");
 						left++;
 					} else {
 						removed++;

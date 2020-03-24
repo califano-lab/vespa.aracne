@@ -20,6 +20,7 @@ import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
  * @param  activators (Optional) array of activators (e.g. kinases)
  * @param  targets (Optional) array of targets (e.g. genes)
  * @param  interactionSet (Optional) HashSet of interactions
+ * @param  interactionMap (Optional) HashMap of interactions
  * @param  miThreshold MI threshold to use to restrict networks
  * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
  * @param  threadCount Number of threads to use
@@ -31,6 +32,7 @@ public class MI {
 	private String[] activators;
 	private String[] targets;
 	private HashSet<String> interactionSet;
+	private HashMap<String, HashMap<String, Double>> interactionsMap;
 
 	// Computed MI threshold
 	private double miThreshold;
@@ -38,6 +40,8 @@ public class MI {
 	private double correlationThreshold;
 	// Computed MI between regulators and targets
 	private HashMap<String, HashMap<String, Double>> finalNetwork;
+	// Prior interaction confidence between regulators and targets
+	private HashMap<String, HashMap<String, Double>> finalNetworkPrior;
 	// Computed sign of correlation between regulators and targets (activation: true, deactivation: false)
 	private HashMap<String, HashMap<String, Boolean>> finalNetworkSign;
 	// Computed correlation between regulators and targets
@@ -51,6 +55,7 @@ public class MI {
 	 * @param  activators (Optional) array of activators (e.g. kinases)
 	 * @param  targets (Optional) array of targets (e.g. genes)
 	 * @param  interactionSet (Optional) HashSet of interactions
+	 * @param  interactionMap (Optional) HashMap of interactions
 	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  threadCount Number of threads to use
@@ -61,6 +66,7 @@ public class MI {
 			String[] activators,
 			String[] targets,
 			HashSet<String> interactionSet,
+			HashMap<String, HashMap<String, Double>> interactionsMap,
 			Double miThreshold,
 			Double correlationThreshold,
 			Integer threadCount
@@ -72,13 +78,16 @@ public class MI {
 
 		// Loop to check which edges are kept. It will generate the finalNetwork and finalNetworkSign HashMap
 		finalNetwork = new HashMap<String, HashMap<String, Double>>();
+		finalNetworkPrior = new HashMap<String, HashMap<String, Double>>();
 		finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 		finalNetworkCorrelation = new HashMap<String, HashMap<String, Double>>();
 		for(int i=0; i<regulators.length; i++){
 			HashMap<String, Double> tt = new HashMap<String, Double>();
+			HashMap<String, Double> ttPrior = new HashMap<String, Double>();
 			HashMap<String, Boolean> ttSign = new HashMap<String, Boolean>();
 			HashMap<String, Double> ttCorrelation = new HashMap<String, Double>();
 			finalNetwork.put(regulators[i], tt);
+			finalNetworkPrior.put(regulators[i], ttPrior);
 			finalNetworkSign.put(regulators[i], ttSign);
 			finalNetworkCorrelation.put(regulators[i], ttCorrelation);
 		}
@@ -86,7 +95,7 @@ public class MI {
 		// Parallelized MI computation
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<regulators.length; i++){
-			MIThread mt = new MIThread(rankData, genes, regulators, activators, interactionSet, miThreshold, correlationThreshold, i);
+			MIThread mt = new MIThread(rankData, genes, regulators, activators, interactionSet, interactionsMap, miThreshold, correlationThreshold, i);
 			executor.execute(mt);
 		}
 
@@ -106,6 +115,7 @@ public class MI {
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
 	 * @param  interactionSet (Optional) HashSet of interactions
+	 * @param  interactionMap (Optional) HashMap of interactions
 	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  regulatorIndex Index of processed regulator
@@ -117,6 +127,7 @@ public class MI {
 		private String[] regulators;
 		private String[] activators;
 		private HashSet<String> interactionSet;
+		private HashMap<String, HashMap<String, Double>> interactionsMap;
 		private double miThreshold;
 		private double correlationThreshold;
 		private int regulatorIndex;
@@ -128,6 +139,7 @@ public class MI {
 			String[] regulators,
 			String[] activators,
 			HashSet<String> interactionSet,
+			HashMap<String, HashMap<String, Double>> interactionsMap,
 			double miThreshold,
 			double correlationThreshold,
 			int regulatorIndex)
@@ -137,6 +149,7 @@ public class MI {
 			this.regulators = regulators;
 			this.activators = activators;
 			this.interactionSet = interactionSet;
+			this.interactionsMap = interactionsMap;
 			this.miThreshold = miThreshold;
 			this.correlationThreshold = correlationThreshold;
 			this.regulatorIndex = regulatorIndex;
@@ -191,9 +204,18 @@ public class MI {
 								setCorrelation(regulators[regulatorIndex], genes[j], correlation);
 							}
 						}
+						if (interactionsMap==null) {
+							setPrior(regulators[regulatorIndex], genes[j], 1.0);
+
+						} else {
+							setPrior(regulators[regulatorIndex], genes[j], interactionsMap.get(regulators[regulatorIndex]).get(genes[j]));
+						}
 					}
 				}
 			}
+		}
+		private synchronized void setPrior(String _tf, String _gene, double _prior){
+			finalNetworkPrior.get(_tf).put(_gene, _prior);
 		}
 		private synchronized void setCorrelation(String _tf, String _gene, Double _correlation){
 			finalNetworkCorrelation.get(_tf).put(_gene, _correlation);
@@ -638,6 +660,10 @@ public class MI {
 
 	public HashMap<String, HashMap<String, Double>> getFinalNetwork() {
 		return finalNetwork;
+	}
+
+	public HashMap<String, HashMap<String, Double>> getFinalNetworkPrior() {
+		return finalNetworkPrior;
 	}
 
 	public HashMap<String, HashMap<String, Boolean>> getFinalNetworkSign() {

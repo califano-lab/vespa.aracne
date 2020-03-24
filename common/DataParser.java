@@ -108,29 +108,30 @@ public class DataParser {
 			String l = "";
 			HashMap<String, HashMap<String, Double>> interactionNetwork = new HashMap<String, HashMap<String, Double>>();
 			boolean firstline = true;
+			int interactionCounter = 0;
+			int regulatorCounter = 0;
 			while((l = br.readLine()) != null){
 				if(firstline){
 					firstline=false;
 				} else {
 					String[] sp = l.split("\t");
-						// protein A: regulator, protein B: target
 						HashMap<String, Double> interactionMap = new HashMap<String, Double>();
 						if (interactionNetwork.containsKey(sp[0])){
 							interactionMap = interactionNetwork.get(sp[0]);
 						}
+						else {
+							regulatorCounter += 1;
+						}
 						interactionMap.put(sp[1], Double.parseDouble(sp[2]));
 						interactionNetwork.put(sp[0], interactionMap);
 
-						// protein B: regulator, protein A: target
-						HashMap<String, Double> interactionMap2 = new HashMap<String, Double>();
-						if (interactionNetwork.containsKey(sp[1])){
-							interactionMap2 = interactionNetwork.get(sp[1]);
-						}
-						interactionMap.put(sp[0], Double.parseDouble(sp[2]));
-						interactionNetwork.put(sp[1], interactionMap);
+						interactionCounter += 1;
 				}
 			}
 			br.close();
+
+			System.out.println("Info: Parsed "+regulatorCounter+" regulators.");
+			System.out.println("Info: Parsed "+interactionCounter+" interactions.");
 
 			return(interactionNetwork);
 		}
