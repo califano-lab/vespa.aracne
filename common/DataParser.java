@@ -102,7 +102,7 @@ public class DataParser {
 	/**
 	 * Method to read an interaction list and ensure that all values are covered by the expression matrix
 	 */
-	public static HashMap<String, HashMap<String, Double>> readInteractionSet(File interactionsFile){
+	public static HashMap<String, HashMap<String, Double>> readInteractionSet(File interactionsFile, String[] regulators, String[] targets){
 		try{
 			BufferedReader br = new BufferedReader(new FileReader(interactionsFile));
 			String l = "";
@@ -117,7 +117,7 @@ public class DataParser {
 					String[] sp = l.split("\t");
 
 					// skip potential self interactions
-					if (!sp[0].equals(sp[1])) {
+					if (!sp[0].equals(sp[1]) && Arrays.asList(regulators).contains(sp[0]) && Arrays.asList(targets).contains(sp[1])) {
 						HashMap<String, Double> interaction = new HashMap<String, Double>();
 						if (interactionSet.containsKey(sp[0])){
 							interaction = interactionSet.get(sp[0]);
@@ -134,7 +134,6 @@ public class DataParser {
 			}
 			br.close();
 
-			System.out.println("Info: Parsed "+regulatorCounter+" regulators.");
 			System.out.println("Info: Parsed "+interactionCounter+" interactions.");
 
 			return(interactionSet);

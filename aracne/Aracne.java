@@ -186,6 +186,7 @@ public class Aracne {
 		if(regulatorsPath != null){
 			regulatorsFile = new File(regulatorsPath);
 			regulators = DataParser.readGeneSet(regulatorsFile, em.getGenes());
+			System.out.println("Info: Parsed "+regulators.length+" regulators.");
 		}
 		// Default: Use all genes as targets
 		else if (expPath != null){
@@ -198,6 +199,7 @@ public class Aracne {
 		if(activatorsPath != null){
 			activatorsFile = new File(activatorsPath);
 			activators = DataParser.readGeneSet(activatorsFile, em.getGenes());
+			System.out.println("Info: Parsed "+activators.length+" activators.");
 		}
 
 		// Read targets file if present
@@ -206,6 +208,7 @@ public class Aracne {
 		if(targetsPath != null){
 			targetsFile = new File(targetsPath);
 			targets = DataParser.readGeneSet(targetsFile, em.getGenes());
+			System.out.println("Info: Parsed "+targets.length+" targets.");
 		}
 		// Default: Use all genes as targets
 		else if (expPath != null){
@@ -218,7 +221,7 @@ public class Aracne {
 		if(interactionsPath != null){
 			// Parse interactions
 			interactionsFile = new File(interactionsPath);
-			interactionSet = DataParser.readInteractionSet(interactionsFile);
+			interactionSet = DataParser.readInteractionSet(interactionsFile, regulators, targets);
 
 			// Generate regulator and target sets
 			HashSet<String> regulatorsSet = new HashSet<String>();
@@ -240,6 +243,9 @@ public class Aracne {
 
 			regulators = regulatorsSet.toArray(new String[0]);
 			targets = targetsSet.toArray(new String[0]);
+
+			System.out.println("Info: Interactome restricted to "+regulators.length+" regulators.");
+			System.out.println("Info: Interactome restricted to "+targets.length+" targets.");
 
 		} else if (!isConsolidate) {
 			for (int i=0; i<regulators.length; i++){
