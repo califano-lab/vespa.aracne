@@ -77,7 +77,7 @@ public class Aracne {
 		String targetsPath = null;
 		String interactionsPath = null;
 		Double fwer = 0.05;
-		Integer maximumInteractions = 10000000;
+		Integer maximumInteractions = 1000000000;
 		Double correlationThreshold = 0.25;
 		Integer seed = null;
 		Integer threadCount = 1;
@@ -214,21 +214,20 @@ public class Aracne {
 
 		// Read interactions file if present
 		File interactionsFile = null;
-		HashMap<String, HashMap<String, Double>> interactionsMap = null;
-		HashSet<String> interactionsSet = new HashSet<String>();
+		HashMap<String, HashMap<String, Double>> interactionSet = new HashMap<String, HashMap<String, Double>>();
 		if(interactionsPath != null){
 			// Parse interactions
 			interactionsFile = new File(interactionsPath);
-			interactionsMap = DataParser.readInteractionSet(interactionsFile);
+			interactionSet = DataParser.readInteractionSet(interactionsFile);
 
 			// Generate regulator and target sets
 			HashSet<String> regulatorsSet = new HashSet<String>();
 			HashSet<String> targetsSet = new HashSet<String>();
-			for (String regulator : interactionsMap.keySet()) {
+			for (String regulator : interactionSet.keySet()) {
 				if (!regulatorsSet.contains(regulator)) {
 					regulatorsSet.add(regulator);
 				}
-				for (String target : interactionsMap.get(regulator).keySet()) {
+				for (String target : interactionSet.get(regulator).keySet()) {
 					if (!targetsSet.contains(target)) {
 						targetsSet.add(target);
 					}
@@ -242,33 +241,27 @@ public class Aracne {
 			regulators = regulatorsSet.toArray(new String[0]);
 			targets = targetsSet.toArray(new String[0]);
 
-			// Generate interaction set
-			for (String regulator : interactionsMap.keySet()) {
-				if (regulatorsSet.contains(regulator)) {
-					for (String target : interactionsMap.get(regulator).keySet()) {
-						if (targetsSet.contains(target)) {
-							if (!interactionsSet.contains(regulator+"#"+target)) {
-								interactionsSet.add(regulator+"#"+target);
-							}
-						}
-					}
-				}
-			}
 		} else if (!isConsolidate) {
 			for (int i=0; i<regulators.length; i++){
 				for (int j=0; j<targets.length; j++){
-					interactionsSet.add(regulators[i]+"#"+targets[j]);
+					if (!regulators[i].equals(targets[j])){
+						HashMap<String, Double> interaction = new HashMap<String, Double>();
+						if (interactionSet.containsKey(regulators[i])){
+							interaction = interactionSet.get(regulators[i]);
+						}
+						interaction.put(targets[j], 1.0);
+						interactionSet.put(regulators[i], interaction);
+					}
 				}
 			}
 		}
-
 
 		// Main ARACNe routines
 		// ARACNe threshold estimation mode
 		if(isThreshold){
 			outputFolder.mkdir();
 
-			runThreshold(em,regulators,targets,interactionsSet,outputFolder,fwer,maximumInteractions,seed);
+			runThreshold(em,regulators,targets,interactionSet,outputFolder,fwer,maximumInteractions,seed);
 		}
 		// ARACNe bootstrapping / standard mode
 		else if(!isConsolidate){
@@ -279,8 +272,7 @@ public class Aracne {
 					regulators,
 					activators,
 					targets,
-					interactionsSet,
-					interactionsMap,
+					interactionSet,
 					outputFolder,
 					processId,
 					fwer,
@@ -296,7 +288,7 @@ public class Aracne {
 	}
 
 	// ARACNe MI Threshold mode
-	private static void runThreshold(ExpressionMatrix em, String[] regulators, String[] targets, HashSet<String> interactionSet, File outputFolder, double fwer, int maximumInteractions, int seed) throws NumberFormatException, Exception{
+	private static void runThreshold(ExpressionMatrix em, String[] regulators, String[] targets, HashMap<String, HashMap<String, Double>> interactionSet, File outputFolder, double fwer, int maximumInteractions, int seed) throws NumberFormatException, Exception{
 		// Generate ranked data
 		HashMap<String, short[]> rankData = em.rank(random);
 
@@ -311,9 +303,17 @@ public class Aracne {
 			System.out.println("Warning: Overwriting existing MI threshold file.");
 		}
 
+		// Compute number of interactions
+		int interactionslength = 0;
+		for (String regulator : interactionSet.keySet()) {
+			for (String target : interactionSet.get(regulator).keySet()) {
+				interactionslength += 1;
+			}
+		}
+
 		// Compute miPvalue for thresholding
-		double miPvalue = fwer / (interactionSet.size()-1);
-		System.out.println("Estimating p-value threshold for "+regulators.length+" regulators, "+targets.length+" targets, "+interactionSet.size()+" interactions and FWER="+fwer+": "+miPvalue);
+		double miPvalue = fwer / interactionslength;
+		System.out.println("Estimating p-value threshold for "+regulators.length+" regulators, "+targets.length+" targets, "+interactionslength+" interactions and FWER="+fwer+": "+miPvalue);
 
 		// Compute miThreshold and write to file
 		MI miCPU = new MI(rankData, regulators, targets, interactionSet, miPvalue, maximumInteractions, seed);
@@ -326,8 +326,7 @@ public class Aracne {
 			String[] regulators,
 			String[] activators,
 			String[] targets,
-			HashSet<String> interactionSet,
-			HashMap<String, HashMap<String, Double>> interactionsMap,
+			HashMap<String, HashMap<String, Double>> interactionSet,
 			File outputFolder, 
 			String processId,
 			Double fwer,
@@ -367,7 +366,7 @@ public class Aracne {
 		long time1 = System.currentTimeMillis();
 		System.out.println("Compute network.");
 
-		MI miCPU = new MI(rankData,regulators,activators,targets,interactionSet,interactionsMap,miThreshold,correlationThreshold,threadCount);
+		MI miCPU = new MI(rankData,regulators,activators,targets,interactionSet,miThreshold,correlationThreshold,threadCount);
 
 		// MI between two interactors
 		HashMap<String, HashMap<String, Double>> finalNetwork = miCPU.getFinalNetwork();

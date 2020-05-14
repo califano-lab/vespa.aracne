@@ -106,7 +106,7 @@ public class DataParser {
 		try{
 			BufferedReader br = new BufferedReader(new FileReader(interactionsFile));
 			String l = "";
-			HashMap<String, HashMap<String, Double>> interactionNetwork = new HashMap<String, HashMap<String, Double>>();
+			HashMap<String, HashMap<String, Double>> interactionSet = new HashMap<String, HashMap<String, Double>>();
 			boolean firstline = true;
 			int interactionCounter = 0;
 			int regulatorCounter = 0;
@@ -115,17 +115,21 @@ public class DataParser {
 					firstline=false;
 				} else {
 					String[] sp = l.split("\t");
-						HashMap<String, Double> interactionMap = new HashMap<String, Double>();
-						if (interactionNetwork.containsKey(sp[0])){
-							interactionMap = interactionNetwork.get(sp[0]);
+
+					// skip potential self interactions
+					if (!sp[0].equals(sp[1])) {
+						HashMap<String, Double> interaction = new HashMap<String, Double>();
+						if (interactionSet.containsKey(sp[0])){
+							interaction = interactionSet.get(sp[0]);
 						}
 						else {
 							regulatorCounter += 1;
 						}
-						interactionMap.put(sp[1], Double.parseDouble(sp[2]));
-						interactionNetwork.put(sp[0], interactionMap);
+						interaction.put(sp[1], Double.parseDouble(sp[2]));
+						interactionSet.put(sp[0], interaction);
 
 						interactionCounter += 1;
+					}
 				}
 			}
 			br.close();
@@ -133,7 +137,7 @@ public class DataParser {
 			System.out.println("Info: Parsed "+regulatorCounter+" regulators.");
 			System.out.println("Info: Parsed "+interactionCounter+" interactions.");
 
-			return(interactionNetwork);
+			return(interactionSet);
 		}
 		catch(Exception e){
 			e.printStackTrace();
