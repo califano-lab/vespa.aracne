@@ -61,7 +61,7 @@
 
     <!-- Creates the deployable jar file. -->
     <target name="jar" depends="compile, git.revision">
-        <property name="version.num" value="2.1dev"/>
+        <property name="version.num" value="2.1"/>
         <jar destfile="${dist.dir}\aracne.jar" basedir="${build.dir}">
             <manifest>
                 <attribute name="Main-Class" value="aracne.Aracne" />
