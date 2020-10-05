@@ -14,4 +14,4 @@ RUN ant main
 WORKDIR /
 
 # set the startup command to execute the jar
-CMD ["java", "-jar", "aracne/dist/aracne.jar"]
+CMD ["java", "-jar", "/aracne/dist/aracne.jar"]
