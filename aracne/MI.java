@@ -15,7 +15,8 @@ import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
  * Requires ranked data and an array of regulators (optional: array of activators),
  * MI threshold and number of threads to use.
  *
- * @param  rankData HashMap linking gene identifiers with ranks
+ * @param  rankData Bootstrapped HashMap linking gene identifiers with ranks
+ * @param  rankDataCor HashMap linking gene identifiers with ranks
  * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
  * @param  activators (Optional) array of activators (e.g. kinases)
  * @param  targets (Optional) array of targets (e.g. genes)
@@ -48,7 +49,8 @@ public class MI {
 	/**
 	 * Constructor for standard ARACNe mode (multi-threaded)
 	 *
-	 * @param  rankData HashMap linking gene identifiers with ranks
+	 * @param  rankData Bootstrapped HashMap linking gene identifiers with ranks
+	 * @param  rankDataCor HashMap linking gene identifiers with ranks
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
 	 * @param  targets (Optional) array of targets (e.g. genes)
@@ -59,6 +61,7 @@ public class MI {
 	 */
 	public MI(
 			HashMap<String, short[]> rankData,
+			HashMap<String, short[]> rankDataCor,
 			String[] regulators,
 			String[] activators,
 			String[] targets,
@@ -91,7 +94,7 @@ public class MI {
 		// Parallelized MI computation
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<regulators.length; i++){
-			MIThread mt = new MIThread(rankData, genes, regulators, activators, interactionSet, miThreshold, correlationThreshold, i);
+			MIThread mt = new MIThread(rankData, rankDataCor, genes, regulators, activators, interactionSet, miThreshold, correlationThreshold, i);
 			executor.execute(mt);
 		}
 
@@ -106,7 +109,8 @@ public class MI {
 	/**
 	 * Single thread of MI computation step
 	 *
-	 * @param  rankData HashMap linking gene identifiers with ranks
+	 * @param  rankData Bootstrapped HashMap linking gene identifiers with ranks
+	 * @param  rankDataCor HashMap linking gene identifiers with ranks
 	 * @param  genes Array of genes covered by rankData
 	 * @param  regulators Array of regulators (e.g. transcription factors or kinases & phosphatases)
 	 * @param  activators (Optional) array of activators (e.g. kinases)
@@ -118,6 +122,7 @@ public class MI {
 	class MIThread extends Thread {
 		// Variables
 		private HashMap<String, short[]> rankData;
+		private HashMap<String, short[]> rankDataCor;
 		private String[] genes;
 		private String[] regulators;
 		private String[] activators;
@@ -129,6 +134,7 @@ public class MI {
 		// Constructor
 		MIThread(
 			HashMap<String, short[]> rankData,
+			HashMap<String, short[]> rankDataCor,
 			String[] genes,
 			String[] regulators,
 			String[] activators,
@@ -138,6 +144,7 @@ public class MI {
 			int regulatorIndex)
 		{
 			this.rankData = rankData;
+			this.rankDataCor = rankDataCor;
 			this.genes = genes;
 			this.regulators = regulators;
 			this.activators = activators;
@@ -153,8 +160,10 @@ public class MI {
 					if (interactionSet.get(regulators[regulatorIndex]).containsKey(genes[j])) {
 						// Regulator ranks
 						short[] vectorX = rankData.get(regulators[regulatorIndex]);
+						short[] vectorX_Cor = rankDataCor.get(regulators[regulatorIndex]);
 						// Target ranks
 						short[] vectorY = rankData.get(genes[j]);
+						short[] vectorY_Cor = rankDataCor.get(genes[j]);
 
 						// Compute MI by hybrid adaptive partitioning
 						double mi = hapMI(vectorX,vectorY);
@@ -162,7 +171,7 @@ public class MI {
 						// Only report results if MI is higher than MI threshold
 						if(mi >= miThreshold){
 							// Compute correlation and sign of interactor (activation or deactivation)
-							ArrayList<short[]> splitQuad = splitQuadrants(vectorX,vectorY);
+							ArrayList<short[]> splitQuad = splitQuadrants(vectorX_Cor,vectorY_Cor);
 							short[] valuesX = splitQuad.get(0);
 							short[] valuesY = splitQuad.get(1);
 							double[] vX = new double[valuesX.length];		

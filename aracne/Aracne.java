@@ -343,14 +343,16 @@ public class Aracne {
 			) throws NumberFormatException, Exception {
 		long initialTime = System.currentTimeMillis();
 
-		HashMap<String, short[]> rankData;
+		HashMap<String, short[]> rankData, rankDataCor;
 		// Bootstrap matrix
 		if(!noBootstrap){
 			System.out.println("Bootstrapping input matrix with "+targets.length+" targets and "+em.getSamples().size()+" samples.");
 			ExpressionMatrix bootstrapped = em.bootstrap(random);
 			rankData = bootstrapped.rank(random);
+			rankDataCor = em.rank(random);
 		} else {
 			rankData = em.rank(random);
+			rankDataCor = rankData;
 		}
 
 		// Apply directional DPI if activators were specified
@@ -372,7 +374,7 @@ public class Aracne {
 		long time1 = System.currentTimeMillis();
 		System.out.println("Compute network.");
 
-		MI miCPU = new MI(rankData,regulators,activators,targets,interactionSet,miThreshold,correlationThreshold,threadCount);
+		MI miCPU = new MI(rankData,rankDataCor,regulators,activators,targets,interactionSet,miThreshold,correlationThreshold,threadCount);
 
 		// MI between two interactors
 		HashMap<String, HashMap<String, Double>> finalNetwork = miCPU.getFinalNetwork();
