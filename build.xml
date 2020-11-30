@@ -61,11 +61,10 @@
 
     <!-- Creates the deployable jar file. -->
     <target name="jar" depends="compile, git.revision">
-        <property name="version.num" value="2.1"/>
         <jar destfile="${dist.dir}\aracne.jar" basedir="${build.dir}">
             <manifest>
                 <attribute name="Main-Class" value="aracne.Aracne" />
-                <attribute name="Implementation-Version" value="${version.num}-${git.revision}" />
+                <attribute name="Implementation-Version" value="${git.revision}" />
             </manifest>
             <zipgroupfileset dir="${lib.dir}" includes="**/*.jar"/>
         </jar>

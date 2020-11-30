@@ -78,7 +78,7 @@ public class Aracne {
 		String interactionsPath = null;
 		Double fwer = 0.05;
 		Integer maximumInteractions = 1000000000;
-		Double correlationThreshold = 0.25;
+		Double correlationThreshold = 0.0;
 		Integer seed = null;
 		Integer threadCount = 1;
 		Double pvalue = 0.05;
@@ -221,25 +221,21 @@ public class Aracne {
 		if(interactionsPath != null){
 			// Parse interactions
 			interactionsFile = new File(interactionsPath);
-			interactionSet = DataParser.readInteractionSet(interactionsFile, regulators, targets);
+			interactionSet = DataParser.readInteractionSet(interactionsFile);
 
 			// Generate regulator and target sets
 			HashSet<String> regulatorsSet = new HashSet<String>();
 			HashSet<String> targetsSet = new HashSet<String>();
+
+			// Remove all non-regulators
+			interactionSet.keySet().retainAll(new HashSet<String>(Arrays.asList(regulators)));
 			for (String regulator : interactionSet.keySet()) {
-				if (!regulatorsSet.contains(regulator)) {
-					regulatorsSet.add(regulator);
-				}
+				interactionSet.get(regulator).keySet().retainAll(new HashSet<String>(Arrays.asList(targets)));
 				for (String target : interactionSet.get(regulator).keySet()) {
-					if (!targetsSet.contains(target)) {
-						targetsSet.add(target);
-					}
+					regulatorsSet.add(regulator);
+					targetsSet.add(target);
 				}
 			}
-
-			// Only retain regulator and target subsets
-			regulatorsSet.retainAll(new HashSet<String>(Arrays.asList(regulators)));
-			targetsSet.retainAll(new HashSet<String>(Arrays.asList(targets)));
 
 			regulators = regulatorsSet.toArray(new String[0]);
 			targets = targetsSet.toArray(new String[0]);

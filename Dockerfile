@@ -15,3 +15,6 @@ WORKDIR /
 
 # set the startup command to execute the jar
 CMD ["java", "-jar", "/aracne/dist/aracne.jar"]
+
+# docker build -t docker.pkg.github.com/califano-lab/aracne/aracne:latest ./
+# docker push docker.pkg.github.com/califano-lab/aracne/aracne:latest
