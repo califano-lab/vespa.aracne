@@ -58,7 +58,7 @@ public class Aracne {
 		options.addOption("i", "interactions", true, "Protein-protein interaction file (e.g. HSM/P physical interaction predictions)");
 		options.addOption("f", "fwer", true, "Threshold estimation mode: family-wise error-rate [default: 0.05]");
 		options.addOption("mi", "maximumInteractions", true,"Threshold estimation mode: maximum interactions to assess [default: 1000000]");
-		options.addOption("ct", "correlationThreshold", true, "Correlation threshold to trust mode of interaction [default: 0.25]");
+		options.addOption("ct", "correlationThreshold", true, "Absolute correlation threshold to trust mode of interaction [default: 0.0]");
 		options.addOption("s", "seed", true, "Optional seed for reproducible results [default: random]");
 		options.addOption("j", "threads", true, "Number of threads to use [default: 1]");
 		options.addOption("p", "pvalue", true, "P-value threshold for the Poisson test of edge significance [default: 0.05]");
