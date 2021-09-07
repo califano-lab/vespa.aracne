@@ -48,6 +48,7 @@ public class Aracne {
 		options.addOption("t", "threshold", false, "Run ARACNe in MI threshold estimation mode");
 		options.addOption("nd", "noDPI", false, "Run ARACNe without DPI");
 		options.addOption("nb", "noBootstrap", false, "Run ARACNe without bootstrapping");
+		options.addOption("d", "deplete", false, "Run ARACNe with depleted missing values");
 
 		// Arguments with values
 		options.addOption("e", "expfile", true, "Expression Matrix (M x N); M=genes, N=samples; Designate missing values with NA");
@@ -69,6 +70,7 @@ public class Aracne {
 		boolean isThreshold = false;
 		boolean noDPI = false;
 		boolean noBootstrap = false;
+		boolean deplete = false;
 
 		String expPath = null;
 		String outputPath = null;
@@ -99,6 +101,9 @@ public class Aracne {
 			}
 			if (cmd.hasOption("noBootstrap")) {
 				noBootstrap = true;
+			}
+			if (cmd.hasOption("deplete")) {
+				deplete = true;
 			}
 			if (cmd.hasOption("pvalue")) {
 				pvalue = Double.parseDouble(cmd.getOptionValue("pvalue"));
@@ -263,7 +268,7 @@ public class Aracne {
 		if(isThreshold){
 			outputFolder.mkdir();
 
-			runThreshold(em,regulators,targets,interactionSet,outputFolder,fwer,maximumInteractions,seed);
+			runThreshold(em,regulators,targets,interactionSet,outputFolder,fwer,maximumInteractions,seed,deplete);
 		}
 		// ARACNe bootstrapping / standard mode
 		else if(!isConsolidate){
@@ -281,7 +286,8 @@ public class Aracne {
 					correlationThreshold,
 					threadCount,
 					noDPI,
-					noBootstrap
+					noBootstrap,
+					deplete
 					);
 		// ARACNe consolidation mode
 		} else {
@@ -290,7 +296,7 @@ public class Aracne {
 	}
 
 	// ARACNe MI Threshold mode
-	private static void runThreshold(ExpressionMatrix em, String[] regulators, String[] targets, HashMap<String, HashMap<String, Double>> interactionSet, File outputFolder, double fwer, int maximumInteractions, int seed) throws NumberFormatException, Exception{
+	private static void runThreshold(ExpressionMatrix em, String[] regulators, String[] targets, HashMap<String, HashMap<String, Double>> interactionSet, File outputFolder, double fwer, int maximumInteractions, int seed, boolean deplete) throws NumberFormatException, Exception{
 		// Generate ranked data
 		HashMap<String, short[]> rankData = em.rank(random);
 
@@ -318,7 +324,7 @@ public class Aracne {
 		System.out.println("Estimating p-value threshold for "+regulators.length+" regulators, "+targets.length+" targets, "+interactionslength+" interactions and FWER="+fwer+": "+miPvalue);
 
 		// Compute miThreshold and write to file
-		MI miCPU = new MI(rankData, regulators, targets, interactionSet, miPvalue, maximumInteractions, seed);
+		MI miCPU = new MI(rankData, regulators, targets, interactionSet, miPvalue, maximumInteractions, seed, deplete);
 		DataParser.writeValue(miCPU.getThreshold(), miThresholdFile);
 	}
 
@@ -335,7 +341,8 @@ public class Aracne {
 			Double correlationThreshold,
 			Integer threadCount,
 			boolean noDPI, // Do not use DPI
-			boolean noBootstrap // Do not use bootstrap
+			boolean noBootstrap, // Do not use bootstrap
+			boolean deplete
 			) throws NumberFormatException, Exception {
 		long initialTime = System.currentTimeMillis();
 
@@ -370,7 +377,7 @@ public class Aracne {
 		long time1 = System.currentTimeMillis();
 		System.out.println("Compute network.");
 
-		MI miCPU = new MI(rankData,rankDataCor,regulators,activators,targets,interactionSet,miThreshold,correlationThreshold,threadCount);
+		MI miCPU = new MI(rankData,rankDataCor,regulators,activators,targets,interactionSet,miThreshold,correlationThreshold,threadCount,deplete);
 
 		// MI between two interactors
 		HashMap<String, HashMap<String, Double>> finalNetwork = miCPU.getFinalNetwork();
@@ -380,6 +387,8 @@ public class Aracne {
 		HashMap<String, HashMap<String, Boolean>> finalNetworkSign = miCPU.getFinalNetworkSign();
 		// Correlation between two interactors
 		HashMap<String, HashMap<String, Double>> finalNetworkCorrelation = miCPU.getFinalNetworkCorrelation();
+		// Coverage between two interactors
+		HashMap<String, HashMap<String, Double>> finalNetworkCoverage = miCPU.getFinalNetworkCoverage();
 
 		System.out.println("Time elapsed for calculating MI: "+(System.currentTimeMillis() - time1)/1000+" sec\n");
 
@@ -400,7 +409,7 @@ public class Aracne {
 		} else {
 			outputFile = new File(outputFolder.getAbsolutePath()+"/bootstrapNetwork_"+processId+".txt");
 		}
-		writeFinal(outputFile,removedEdges,finalNetwork,finalNetworkCorrelation,finalNetworkPrior);
+		writeFinal(outputFile,removedEdges,finalNetwork,finalNetworkCorrelation,finalNetworkPrior,finalNetworkCoverage);
 
 		long finalTime = System.currentTimeMillis();
 		System.out.println("Total time elapsed: "+(finalTime - initialTime)/1000+" sec");
@@ -440,7 +449,8 @@ public class Aracne {
 		HashMap<String, HashSet<String>> removedEdges,
 		HashMap<String, HashMap<String, Double>> finalNet,
 		HashMap<String, HashMap<String, Double>> finalNetCorrelation,
-		HashMap<String, HashMap<String, Double>> finalNetPrior){
+		HashMap<String, HashMap<String, Double>> finalNetPrior,
+		HashMap<String, HashMap<String, Double>> finalNetCoverage){
 		try{
 			int left = 0;
 			int removed = 0;
@@ -448,7 +458,7 @@ public class Aracne {
 			BufferedWriter bw = new BufferedWriter(new FileWriter(finalDPIfile));
 
 			// Header
-			bw.write("Regulator\tTarget\tMI\tCorrelation\tPrior\n");
+			bw.write("Regulator\tTarget\tMI\tCorrelation\tPrior\tCoverage\n");
 
 			for(String k : finalNet.keySet()){
 				HashSet<String> tr = null;
@@ -461,7 +471,7 @@ public class Aracne {
 
 				for(String kk : finalNet.get(k).keySet()){
 					if(!tr.contains(kk)){
-						bw.write(k+"\t"+kk+"\t"+finalNet.get(k).get(kk)+"\t" + finalNetCorrelation.get(k).get(kk)+"\t" + finalNetPrior.get(k).get(kk) +"\n");
+						bw.write(k+"\t"+kk+"\t"+finalNet.get(k).get(kk)+"\t" + finalNetCorrelation.get(k).get(kk)+"\t" + finalNetPrior.get(k).get(kk)+"\t" + finalNetCoverage.get(k).get(kk) +"\n");
 						left++;
 					} else {
 						removed++;

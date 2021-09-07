@@ -24,6 +24,7 @@ import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
  * @param  miThreshold MI threshold to use to restrict networks
  * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
  * @param  threadCount Number of threads to use
+ * @param  deplete Deplete missing values (no hpMI)
  */
 public class MI {
 	// Variables
@@ -45,6 +46,9 @@ public class MI {
 	private HashMap<String, HashMap<String, Boolean>> finalNetworkSign;
 	// Computed correlation between regulators and targets
 	private HashMap<String, HashMap<String, Double>> finalNetworkCorrelation;
+	// Computed coverage between regulators and targets
+	private HashMap<String, HashMap<String, Double>> finalNetworkCoverage;
+	private boolean deplete;
 
 	/**
 	 * Constructor for standard ARACNe mode (multi-threaded)
@@ -58,6 +62,7 @@ public class MI {
 	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  threadCount Number of threads to use
+	 * @param  deplete Deplete missing values (no hpMI)
 	 */
 	public MI(
 			HashMap<String, short[]> rankData,
@@ -68,7 +73,8 @@ public class MI {
 			HashMap<String, HashMap<String, Double>> interactionSet,
 			Double miThreshold,
 			Double correlationThreshold,
-			Integer threadCount
+			Integer threadCount,
+			boolean deplete
 			) {
 		// Set genes
 		// this.genes = rankData.keySet().toArray(new String[0]);
@@ -80,21 +86,24 @@ public class MI {
 		finalNetworkPrior = new HashMap<String, HashMap<String, Double>>();
 		finalNetworkSign = new HashMap<String, HashMap<String, Boolean>>();
 		finalNetworkCorrelation = new HashMap<String, HashMap<String, Double>>();
+		finalNetworkCoverage = new HashMap<String, HashMap<String, Double>>();
 		for(int i=0; i<regulators.length; i++){
 			HashMap<String, Double> tt = new HashMap<String, Double>();
 			HashMap<String, Double> ttPrior = new HashMap<String, Double>();
 			HashMap<String, Boolean> ttSign = new HashMap<String, Boolean>();
 			HashMap<String, Double> ttCorrelation = new HashMap<String, Double>();
+			HashMap<String, Double> ttCoverage = new HashMap<String, Double>();
 			finalNetwork.put(regulators[i], tt);
 			finalNetworkPrior.put(regulators[i], ttPrior);
 			finalNetworkSign.put(regulators[i], ttSign);
 			finalNetworkCorrelation.put(regulators[i], ttCorrelation);
+			finalNetworkCoverage.put(regulators[i], ttCoverage);
 		}
 
 		// Parallelized MI computation
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		for(int i=0; i<regulators.length; i++){
-			MIThread mt = new MIThread(rankData, rankDataCor, genes, regulators, activators, interactionSet, miThreshold, correlationThreshold, i);
+			MIThread mt = new MIThread(rankData, rankDataCor, genes, regulators, activators, interactionSet, miThreshold, correlationThreshold, i, deplete);
 			executor.execute(mt);
 		}
 
@@ -118,6 +127,7 @@ public class MI {
 	 * @param  miThreshold MI threshold to use to restrict networks
 	 * @param  correlationThreshold Correlation threshold to use to trust mode of interaction
 	 * @param  regulatorIndex Index of processed regulator
+	 * @param  deplete Deplete missing values (no hpMI)
 	 */
 	class MIThread extends Thread {
 		// Variables
@@ -130,6 +140,7 @@ public class MI {
 		private double miThreshold;
 		private double correlationThreshold;
 		private int regulatorIndex;
+		private boolean deplete;
 
 		// Constructor
 		MIThread(
@@ -141,7 +152,8 @@ public class MI {
 			HashMap<String, HashMap<String, Double>> interactionSet,
 			double miThreshold,
 			double correlationThreshold,
-			int regulatorIndex)
+			int regulatorIndex,
+			boolean deplete)
 		{
 			this.rankData = rankData;
 			this.rankDataCor = rankDataCor;
@@ -152,6 +164,7 @@ public class MI {
 			this.miThreshold = miThreshold;
 			this.correlationThreshold = correlationThreshold;
 			this.regulatorIndex = regulatorIndex;
+			this.deplete = deplete;
 		}
 
 		public void run() {
@@ -166,7 +179,7 @@ public class MI {
 						short[] vectorY_Cor = rankDataCor.get(genes[j]);
 
 						// Compute MI by hybrid adaptive partitioning
-						double mi = hapMI(vectorX,vectorY);
+						double mi = hapMI(vectorX,vectorY,deplete);
 
 						// Only report results if MI is higher than MI threshold
 						if(mi >= miThreshold){
@@ -178,6 +191,7 @@ public class MI {
 							vX = castShort2Double(valuesX);
 							double[] vY = new double[valuesY.length];
 							vY = castShort2Double(valuesY);
+							double coverage = ((double)valuesX.length) / vectorX_Cor.length;
 							
 							// We need at least two data points to assess correlation. If not, we drop the interaction.
 							double correlation = Double.NaN;
@@ -194,16 +208,19 @@ public class MI {
 											setMI(regulators[regulatorIndex], genes[j], mi);
 											setSign(regulators[regulatorIndex], genes[j], true);
 											setCorrelation(regulators[regulatorIndex], genes[j], (1.0*Math.abs(correlation)));
+											setCoverage(regulators[regulatorIndex], genes[j], coverage);
 									}else if(!Arrays.asList(activators).contains( regulators[regulatorIndex]) & (!sign | Math.abs(correlation) < correlationThreshold)){
 											setMI(regulators[regulatorIndex], genes[j], mi);
 											setSign(regulators[regulatorIndex], genes[j], false);
 											setCorrelation(regulators[regulatorIndex], genes[j], (-1.0*(Math.abs(correlation))));
+											setCoverage(regulators[regulatorIndex], genes[j], coverage);
 									}
 								// If activators are not specified, just report all results
 								}else{
 									setMI(regulators[regulatorIndex], genes[j], mi);
 									setSign(regulators[regulatorIndex], genes[j], sign);
 									setCorrelation(regulators[regulatorIndex], genes[j], correlation);
+									setCoverage(regulators[regulatorIndex], genes[j], coverage);
 								}
 							}
 							setPrior(regulators[regulatorIndex], genes[j], interactionSet.get(regulators[regulatorIndex]).get(genes[j]));
@@ -217,6 +234,9 @@ public class MI {
 		}
 		private synchronized void setCorrelation(String _tf, String _gene, Double _correlation){
 			finalNetworkCorrelation.get(_tf).put(_gene, _correlation);
+		}
+		private synchronized void setCoverage(String _tf, String _gene, Double _coverage){
+			finalNetworkCoverage.get(_tf).put(_gene, _coverage);
 		}
 		private synchronized void setSign(String _tf, String _gene, boolean _sign){
 			finalNetworkSign.get(_tf).put(_gene, _sign);
@@ -236,6 +256,7 @@ public class MI {
 	 * @param  miPvalue miPvalue for thresholding
 	 * @param  maximumInteractions Maximum number of interactions to assess
 	 * @param  seed Seed to use for reproducible results
+	 * @param  deplete Deplete missing values (no hpMI)
 	 */
 	public MI(
 			HashMap<String, short[]> rankData, 
@@ -244,7 +265,8 @@ public class MI {
 			HashMap<String, HashMap<String, Double>> interactionSet,
 			double miPvalue,
 			int maximumInteractions,
-			int seed
+			int seed,
+			boolean deplete
 			) {
 		// Set genes
 		this.genes = rankData.keySet().toArray(new String[0]);
@@ -260,7 +282,7 @@ public class MI {
 		this.interactionSet = interactionSet;
 
 		// Compute MI threshold
-		this.miThreshold = calibrateMIThreshold(rankData,miPvalue,maximumInteractions,seed);
+		this.miThreshold = calibrateMIThreshold(rankData,miPvalue,maximumInteractions,seed,deplete);
 	}
 
 	/**
@@ -271,8 +293,9 @@ public class MI {
 	 * @param  miPvalue miPvalue for thresholding
 	 * @param  maximumInteractions Maximum number of interactions to assess
 	 * @param  seed Seed to use for reproducible results
+	 * @param  deplete Deplete missing values (no hpMI)
 	 */
-	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int maximumInteractions, int seed){
+	public double calibrateMIThreshold(HashMap<String, short[]> rankData, double miPvalue, int maximumInteractions, int seed, boolean deplete){
 		int numberOfSamples = rankData.get(genes[0]).length;
 
 		// Compute number of interactions
@@ -321,7 +344,7 @@ public class MI {
 				if (interactionCounter < maximumInteractions) {
 					if (interactionSet.containsKey(regulators[i])) {
 						if (interactionSet.get(regulators[i]).containsKey(targets[j])) {
-							mit.add(hapMI(tempData.get(regulators[i]), tempData.get(targets[j])));
+							mit.add(hapMI(tempData.get(regulators[i]), tempData.get(targets[j]), deplete));
 						}
 					}
 				}
@@ -476,17 +499,24 @@ public class MI {
 	 *
 	 * @param  vectorX short[] of regulator
 	 * @param  vectorY short[] of target
+	 * @param  deplete Deplete missing values (no hpMI)
 	 */
-	 public static double hapMI(short[] vectorX, short[] vectorY){
+	 public static double hapMI(short[] vectorX, short[] vectorY, boolean deplete){
 		// Preranked matrices for candidate interactors might not overlap perfectly, thus requires reranking
 		ArrayList<short[]> splitQuad = splitQuadrants(vectorX, vectorY);
 		short[] valuesX = splitQuad.get(0);
 		short[] valuesY = splitQuad.get(1);
 
 		// Get the counts for NA data points
-		int bothNACount = (int)splitQuad.get(2)[0];
-		int na1 = (int)splitQuad.get(3)[0];
-		int na2 = (int)splitQuad.get(4)[0];
+		int bothNACount = 0;
+		int na1 = 0;
+		int na2 = 0;
+
+		if (!deplete) {
+			bothNACount = (int)splitQuad.get(2)[0];
+			na1 = (int)splitQuad.get(3)[0];
+			na2 = (int)splitQuad.get(4)[0];
+		}
 
 		boolean firstLoop = true;
 
@@ -675,6 +705,10 @@ public class MI {
 
 	public HashMap<String, HashMap<String, Double>> getFinalNetworkCorrelation() {
 		return finalNetworkCorrelation;
+	}
+
+	public HashMap<String, HashMap<String, Double>> getFinalNetworkCoverage() {
+		return finalNetworkCoverage;
 	}
 
 	public short median(short[] input){
