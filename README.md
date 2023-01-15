@@ -1,15 +1,15 @@
-# ARACNe-AP
-Network Reverse Engineering through AP inference of Mutual Information
+# vespa.aracne - ARACNe module for VESPA algorithm
+Signaling network reverse engineering through inference of mutual information by hybrid partitioning
 
 ## Overview
-ARACNe-AP (Algorithm for the Reconstruction of Accurate Cellular Networks with Adaptive Partitioning) is a complete overhaul of the first ARACNe implementation, originally published by Margolin and colleagues in BMC Bioinformatics in 2006. 
+vespa.aracne (Algorithm for the Reconstruction of Accurate Cellular Networks with Adaptive Partitioning) is a signaling network specific extension of the original ARANCe and ARACNE-AP algorithms.
 
 Lachmann A, Giorgi FM, Lopez G, Califano A. *ARACNe-AP: gene network reverse engineering through adaptive partitioning inference of mutual information.* **Bioinformatics.** 2016 Jul 15;32(14):2233-5. doi: [10.1093/bioinformatics/btw216](https://dx.doi.org/10.1093/bioinformatics/btw216). Epub 2016 Apr 23.
 
 Margolin AA, Nemenman I, Basso K, Wiggins C, Stolovitzky G, Dalla Favera R, Califano A. *ARACNE: an algorithm for the reconstruction of gene regulatory networks in a mammalian cellular context.* **BMC Bioinformatics.** 2006 Mar 20;7 Suppl 1:S7. doi: [10.1186/1471-2105-7-S1-S7](https://dx.doi.org/10.1186/1471-2105-7-S1-S7)
 
-## Building ARACNe-AP
-``ARACNe-AP`` requires JDK > 1.8 and ANT. Use the following command in the repository root directory to build the ``jar`` and documentation:
+## Building vespa.aracne
+``vespa.aracne`` requires JDK > 1.8 and ANT. Use the following command in the repository root directory to build the ``jar`` and documentation:
 
 ```
 ant main
@@ -17,23 +17,23 @@ ant main
 
 The jar will be placed in ``dist/aracne.jar``. The documentation can be found in ``docs/index.html``.
 
-## Using ARACNe-AP
-### Input files needed to run ARACNe
+## Using vespa.aracne
+### Input files needed to run vespa.aracne
 See below for file format specification (or download the test files from our repository)
 1.	Gene expression matrix.
-2.	List of regulators (e.g. Transcription Factors)
+2.	List of regulators (e.g. Kinases or Transcription Factors)
 
-### Steps required to run ARACNe
+### Steps required to run vespa.aracne
 1.	Calculate a threshold for Mutual Information
-2.	Run ARACNe on bootstraps of the input matrix
+2.	Run vespa.aracne on bootstraps of the input matrix
 3.	Consolidate, i.e. combine the bootstraps into a final network file
 
-### Optional ways to run ARACNe
+### Optional ways to run vespa.aracne
 1.	Removing DPI (Data Process Inequality) will preserve every edge that passes the Mutual Information threshold.
-2.	ARACNe by default operates on a bootstrapped version of the input matrix. It is possible to turn this feature off.
+2.	vespa.aracne by default operates on a bootstrapped version of the input matrix. It is possible to turn this feature off.
 3.	During the consolidation step, a Bonferroni correction is applied to the p-values obtained from the Poisson distribution used to determine the significance of each edge according to their appearance in different bootstraps. It is possible to turn this correction off, with the result of having a slightly bigger output network.
 
-### Output of ARACNe-AP
+### Output of vespa.aracne
 Apart from the individual bootstraps, the consolidation step of ARACNe-AP will produce a file called network.txt in the output folder provided by the user. This file shows every significant interaction in four columns
 1.	The regulator.
 2.	The target.
@@ -98,7 +98,7 @@ java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder --tfs test/tfs.t
 --calculateThreshold
 ```
 
-### Example 2: run ARACNe on a single bootstrap
+### Example 2: run vespa.aracne on a single bootstrap
 ```
 java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder --tfs test/tfs.txt --pvalue 1E-8 --seed 1
 ```
