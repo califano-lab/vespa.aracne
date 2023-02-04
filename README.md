@@ -1,5 +1,5 @@
-# vespa.aracne - ARACNe module for VESPA algorithm
-Signaling network reverse engineering through inference of mutual information by hybrid partitioning
+# vespa.aracne - ARACNe module for the VESPA algorithm
+Gene regulatory or signaling network reverse engineering through inference of mutual information by hybrid partitioning.
 
 ## Overview
 vespa.aracne (Algorithm for the Reconstruction of Accurate Cellular Networks with Adaptive Partitioning) is a signaling network specific extension of the original ARANCe and ARACNE-AP algorithms.
@@ -8,7 +8,7 @@ Lachmann A, Giorgi FM, Lopez G, Califano A. *ARACNe-AP: gene network reverse eng
 
 Margolin AA, Nemenman I, Basso K, Wiggins C, Stolovitzky G, Dalla Favera R, Califano A. *ARACNE: an algorithm for the reconstruction of gene regulatory networks in a mammalian cellular context.* **BMC Bioinformatics.** 2006 Mar 20;7 Suppl 1:S7. doi: [10.1186/1471-2105-7-S1-S7](https://dx.doi.org/10.1186/1471-2105-7-S1-S7)
 
-## Building vespa.aracne
+## Installation & Building
 ``vespa.aracne`` requires JDK > 1.8 and ANT. Use the following command in the repository root directory to build the ``jar`` and documentation:
 
 ```
@@ -17,10 +17,12 @@ ant main
 
 The jar will be placed in ``dist/aracne.jar``. The documentation can be found in ``docs/index.html``.
 
-## Using vespa.aracne
+## Usage
+For further information on usage, refer to the [`vespa.tutorial`](https://github.com/califano-lab/vespa.tutorial) documentation.
+
 ### Input files needed to run vespa.aracne
 See below for file format specification (or download the test files from our repository)
-1.	Gene expression matrix.
+1.	Gene expression or phosphoproteomic matrix.
 2.	List of regulators (e.g. Kinases or Transcription Factors)
 
 ### Steps required to run vespa.aracne
@@ -29,7 +31,7 @@ See below for file format specification (or download the test files from our rep
 3.	Consolidate, i.e. combine the bootstraps into a final network file
 
 ### Optional ways to run vespa.aracne
-1.	Removing DPI (Data Process Inequality) will preserve every edge that passes the Mutual Information threshold.
+1.	Removing signal transduction (stDPI) or standard DPI (Data Process Inequality) will preserve every edge that passes the Mutual Information threshold.
 2.	vespa.aracne by default operates on a bootstrapped version of the input matrix. It is possible to turn this feature off.
 3.	During the consolidation step, a Bonferroni correction is applied to the p-values obtained from the Poisson distribution used to determine the significance of each edge according to their appearance in different bootstraps. It is possible to turn this correction off, with the result of having a slightly bigger output network.
 
@@ -38,10 +40,12 @@ Apart from the individual bootstraps, the consolidation step of ARACNe-AP will p
 1.	The regulator.
 2.	The target.
 3.	The MI (Mutual Information) of the pair.
-4.	The pvalue of the pair (assessed during the consolidation step by integrating the bootstraps).
+4.  Spearman's correlation of the pair.
+5.  The prior probability of the pair.
+6.	The pvalue of the pair (assessed during the consolidation step by integrating the bootstraps).
 
 ## Input file format
-### Gene lists
+### Gene / phosphosite lists
 A text file, containing one gene symbol per line, e.g.
 ```
 g165
@@ -53,7 +57,7 @@ g1390
 ```
 
 ### Dataset
-A text file, tab separated, with genes on rows and samples on columns
+A text file, tab separated, with genes / phosphosites on rows and samples on columns
 ```
 gene    Sample1   Sample2   Sample3
 g1   1.8 5.2 4.1
@@ -63,44 +67,51 @@ g4   7.2 9.1 0.6
 ```
 
 ## Parameters
-``-e`` is the expression file
+``-c`` Run ARACNe in consolidation mode
 
-``-d`` is an optional expression file for the targets (meaning you can specify an expression file for tfs, and one for targets, with the same sample names. This is for aracne plus)
+``-t`` Run ARACNe in MI threshold estimation mode
 
-``-t`` is the TF list
+``-nd`` Run ARACNe without DPI
 
-``-o`` is the output folder
+``-nb`` Run ARACNe without bootstrapping
 
-``--consolidate`` is telling java to run aracne in consolidate mode (that is, you point it to a directory with bootstraps, and they will be consolidated)
+``-e`` Expression Matrix (M x N); M=genes, N=samples; Designate missing values with NA
 
-``--calculateThreshold`` is telling Java to run it in threshold mode
+``-o`` Output directory
 
-``-p`` is the p-value threshold for the MI to be significant (1E-8 usually)
+``-r`` Regulator identifier file (e.g. transcription factors or kinases & phosphatases)
 
---consolidatepvalue is the p-value threshold for the Poisson test of edge significance in multi-bootstrap mode (if omitted, it is set to 0.05
+``-a`` Activator identifier file (e.g. kinases)
 
-``-s`` is the optional seed, to make the threshold mode and the bootstrap reproducible
+``-tg`` Target identifier file (e.g. genes) [default: use all genes or proteins]
 
-``--threads`` is the number of threads (it is used only in standard mode, i.e. bootstrap)
+``-i`` Protein-protein interaction file (e.g. HSM/P physical interaction predictions)
 
-``--nodpi`` tells ARACNE not to run DPI
+``-f`` Threshold estimation mode: family-wise error-rate [default: 0.05]
 
-``--nobootstrap`` tells ARACNE not to do bootstrapping
+``-mi`` Threshold estimation mode: maximum interactions to assess [default: 1000000]
 
-``--nobonferroni`` removes the Bonferroni correction
+``-ct`` Absolute correlation threshold to trust mode of interaction [default: 0.0]
+
+``-s`` Optional seed for reproducible results [default: random]
+
+``-j`` Number of threads to use [default: 1]
+
+``-p`` P-value threshold for the Poisson test of edge significance [default: 0.05]
+
+``-m`` Method for multiple-testing correction [BH, Bonferroni, none; default: BH]
 
 ## Examples
 Note: the examples have been written based on the provided test sets: ``test/matrix.txt`` (the gene expression matrix) and ``test/tfs.txt`` (the list of regulators). Also, example 3 (the running of 100 bootstraps) is written using a “for loop” as a useful method to run 100 bootstraps with a controlled seed.
 
 ### Example 1: calculate threshold with a fixed seed
 ```
-java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder --tfs test/tfs.txt --pvalue 1E-8 --seed 1 \
---calculateThreshold
+java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder -r test/tfs.txt -t -s 1
 ```
 
 ### Example 2: run vespa.aracne on a single bootstrap
 ```
-java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder --tfs test/tfs.txt --pvalue 1E-8 --seed 1
+java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder -r test/tfs.txt -s 1
 ```
 
 ### Example 3: run 100 reproducible bootstraps
@@ -108,27 +119,25 @@ java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder --tfs test/tfs.t
 ```
 for i in {1..100}
 do
-java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder --tfs test/tfs.txt --pvalue 1E-8 --seed $i
+java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder -r test/tfs.txt -s $i
 done
 ```
 #### Windows loop
 ```
-for /l %i in (1, 1, 100) do java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder --tfs test/tfs.txt \
---pvalue 1E-8 --seed %i
+for /l %i in (1, 1, 100) do java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder -r test/tfs.txt -s %i
 ```
 
 ### Example 4: consolidate bootstraps in the output folder
 ```
-java -Xmx5G -jar Aracne.jar -o outputFolder --consolidate
+java -Xmx5G -jar aracne.jar -o outputFolder -c
 ```
 
 ### Example 5: run a single ARACNE with no bootstrap and no DPI
 ```
-java -Xmx5G -jar Aracne.jar -e test/matrix.txt  -o outputFolder --tfs test/tfs.txt --pvalue 1E-8 --seed 1 \
---nobootstrap --noDPI
+java -Xmx5G -jar aracne.jar -e test/matrix.txt  -o outputFolder -r test/tfs.txt -s 1 -nd -nb
 ```
 
 ### Example 6: consolidate bootstraps without Bonferroni correction
 ```
-java -Xmx5G -jar Aracne.jar -o outputFolder --consolidate --nobonferroni
+java -Xmx5G -jar aracne.jar -o outputFolder -c -m none
 ```
